@@ -1,0 +1,61 @@
+{
+  "title": "Live Stream",
+  "subtitle": "Broadcasting from GitHub Actions",
+  "background": {
+    "type": "gradient",
+    "value": "linear-gradient(145deg, #0b1220 0%, #13233f 45%, #0f3d3a 100%)",
+    "imageUrl": ""
+  },
+  "source": {
+    "type": "none",
+    "url": ""
+  },
+  "widgets": [
+    {
+      "id": "clock",
+      "type": "clock",
+      "enabled": true,
+      "position": "top-right",
+      "timezone": "UTC",
+      "format": "24h"
+    },
+    {
+      "id": "ticker",
+      "type": "ticker",
+      "enabled": true,
+      "position": "bottom",
+      "text": "Welcome to the stream · Powered by GitHub Actions"
+    },
+    {
+      "id": "status",
+      "type": "status",
+      "enabled": true,
+      "position": "top-left",
+      "label": "ON AIR"
+    },
+    {
+      "id": "custom-text",
+      "type": "text",
+      "enabled": false,
+      "position": "center",
+      "text": "Custom message"
+    },
+    {
+      "id": "iframe",
+      "type": "iframe",
+      "enabled": false,
+      "position": "full",
+      "url": ""
+    }
+  ],
+  "brand": {
+    "name": "LIVE DESK",
+    "accent": "#f0a202"
+  },
+  "video": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "bitrate": "2500k"
+  }
+}

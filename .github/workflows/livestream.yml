@@ -1,0 +1,79 @@
+name: Livestream
+
+# Starts a YouTube livestream segment (~55 minutes), then triggers
+# continue-livestream.yml so the next runner can reconnect and keep going.
+
+on:
+  workflow_dispatch:
+    inputs:
+      segment:
+        description: Segment number
+        required: false
+        default: "1"
+      reason:
+        description: Why this run started
+        required: false
+        default: "manual-start"
+  repository_dispatch:
+    types: [start-stream]
+
+permissions:
+  contents: read
+  actions: write
+
+# No concurrency lock: the next segment must start overlapping (~90s)
+# so YouTube can reconnect before this runner stops encoding.
+
+jobs:
+  stream:
+    name: Stream segment
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
+      YOUTUBE_RTMP_URL: ${{ secrets.YOUTUBE_RTMP_URL }}
+      SEGMENT_NUMBER: ${{ github.event.inputs.segment || github.event.client_payload.segment || '1' }}
+      SEGMENT_MINUTES: "55"
+      HANDOFF_SECONDS: "90"
+      CONTINUE_WORKFLOW: continue-livestream.yml
+      GH_TOKEN: ${{ secrets.STREAM_CONTROL_TOKEN || secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.STREAM_CONTROL_TOKEN || secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require stream key
+        run: |
+          if [ -z "$YOUTUBE_STREAM_KEY" ]; then
+            echo "::error::Set repository secret YOUTUBE_STREAM_KEY (YouTube Studio → Go live → Stream key)"
+            exit 1
+          fi
+
+      - name: Mark stream active
+        continue-on-error: true
+        run: |
+          gh variable set STREAM_ACTIVE --body "true" --repo "$GITHUB_REPOSITORY"
+          gh variable set STREAM_SEGMENT --body "$SEGMENT_NUMBER" --repo "$GITHUB_REPOSITORY"
+          gh variable set STREAM_STATUS --body "live" --repo "$GITHUB_REPOSITORY"
+
+      - name: Install dependencies
+        run: bash scripts/check-deps.sh
+
+      - name: Run livestream segment
+        run: bash scripts/stream.sh
+
+      - name: Segment summary
+        if: always()
+        run: |
+          echo "Segment ${SEGMENT_NUMBER} finished (reason: ${{ github.event.inputs.reason || github.event.action || 'dispatch' }})"
+          if [ -f /tmp/stream-stop.flag ]; then
+            echo "Operator requested stop — not continuing."
+            gh variable set STREAM_STATUS --body "stopped" --repo "$GITHUB_REPOSITORY" || true
+            gh variable set STREAM_ACTIVE --body "false" --repo "$GITHUB_REPOSITORY" || true
+          elif [ -f /tmp/stream-segment-end.flag ]; then
+            echo "Handoff already triggered near end of segment."
+            gh variable set STREAM_STATUS --body "handing-off" --repo "$GITHUB_REPOSITORY" || true
+          else
+            echo "Segment ended without stop flag; continuation may still have been triggered."
+          fi
