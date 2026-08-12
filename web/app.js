@@ -77,10 +77,241 @@ function setStreamState(text, live) {
   el.dataset.on = live ? "true" : "false";
 }
 
-function widgetMap(cfg) {
-  const map = {};
-  for (const w of cfg.widgets || []) map[w.type] = w;
-  return map;
+const WIDGET_PRESETS = {
+  "top-left": { x: 2.5, y: 3.5, width: 14, height: 8 },
+  "top-right": { x: 82, y: 3.5, width: 15, height: 8 },
+  "top-center": { x: 35, y: 3.5, width: 30, height: 8 },
+  "center": { x: 25, y: 35, width: 50, height: 30 },
+  "bottom": { x: 0, y: 90, width: 100, height: 8 },
+  "bottom-left": { x: 2.5, y: 78, width: 30, height: 18 },
+  "bottom-right": { x: 68, y: 78, width: 30, height: 18 },
+  "full": { x: 0, y: 0, width: 100, height: 100 },
+  "left-panel": { x: 2, y: 15, width: 28, height: 70 },
+  "right-panel": { x: 70, y: 15, width: 28, height: 70 },
+};
+
+const WIDGET_DEFAULTS = {
+  status: {
+    label: "ON AIR",
+    position: { x: 2.5, y: 3.5, xUnit: "%", yUnit: "%" },
+    size: { width: 12, height: 7, widthUnit: "%", heightUnit: "%" },
+  },
+  clock: {
+    timezone: "UTC",
+    format: "24h",
+    position: { x: 82, y: 3.5, xUnit: "%", yUnit: "%" },
+    size: { width: 15, height: 7, widthUnit: "%", heightUnit: "%" },
+  },
+  ticker: {
+    text: "Welcome to the stream",
+    position: { x: 0, y: 90, xUnit: "%", yUnit: "%" },
+    size: { width: 100, height: 8, widthUnit: "%", heightUnit: "%" },
+  },
+  text: {
+    text: "Custom message",
+    position: { x: 25, y: 42, xUnit: "%", yUnit: "%" },
+    size: { width: 50, height: 12, widthUnit: "%", heightUnit: "%" },
+  },
+  iframe: {
+    url: "",
+    label: "Embed",
+    position: { x: 55, y: 20, xUnit: "%", yUnit: "%" },
+    size: { width: 40, height: 45, widthUnit: "%", heightUnit: "%" },
+  },
+};
+
+let widgetsState = [];
+
+function uid(type) {
+  return `${type}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeWidget(raw = {}) {
+  const type = raw.type || "text";
+  const defaults = WIDGET_DEFAULTS[type] || WIDGET_DEFAULTS.text;
+  const legacyPosition = typeof raw.position === "string" ? raw.position : null;
+
+  let position = {
+    x: raw.position?.x ?? defaults.position.x,
+    y: raw.position?.y ?? defaults.position.y,
+    xUnit: raw.position?.xUnit || defaults.position.xUnit || "%",
+    yUnit: raw.position?.yUnit || defaults.position.yUnit || "%",
+  };
+  let size = {
+    width: raw.size?.width ?? defaults.size.width,
+    height: raw.size?.height ?? defaults.size.height,
+    widthUnit: raw.size?.widthUnit || defaults.size.widthUnit || "%",
+    heightUnit: raw.size?.heightUnit || defaults.size.heightUnit || "%",
+  };
+
+  if (legacyPosition && WIDGET_PRESETS[legacyPosition]) {
+    const p = WIDGET_PRESETS[legacyPosition];
+    position = { x: p.x, y: p.y, xUnit: "%", yUnit: "%" };
+    size = { width: p.width, height: p.height, widthUnit: "%", heightUnit: "%" };
+  }
+
+  return {
+    id: raw.id || uid(type),
+    type,
+    enabled: raw.enabled !== false,
+    zIndex: raw.zIndex ?? 5,
+    label: raw.label ?? defaults.label ?? "",
+    text: raw.text ?? defaults.text ?? "",
+    url: raw.url ?? defaults.url ?? "",
+    timezone: raw.timezone ?? defaults.timezone ?? "UTC",
+    format: raw.format ?? defaults.format ?? "24h",
+    position,
+    size,
+  };
+}
+
+function createWidget(type) {
+  return normalizeWidget({ type, ...WIDGET_DEFAULTS[type] });
+}
+
+function typeLabel(type) {
+  return (
+    {
+      status: "ON AIR badge",
+      clock: "Clock",
+      ticker: "Ticker",
+      text: "Custom text",
+      iframe: "Iframe / website",
+    }[type] || type
+  );
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function widgetFieldsHtml(widget) {
+  if (widget.type === "status") {
+    return `<label class="span-4"><span>Badge label</span><input data-field="label" value="${escapeHtml(widget.label)}" /></label>`;
+  }
+  if (widget.type === "clock") {
+    return `
+      <label class="span-2"><span>Timezone</span><input data-field="timezone" value="${escapeHtml(widget.timezone)}" /></label>
+      <label class="span-2"><span>Format</span>
+        <select data-field="format">
+          <option value="24h" ${widget.format === "24h" ? "selected" : ""}>24h</option>
+          <option value="12h" ${widget.format === "12h" ? "selected" : ""}>12h</option>
+        </select>
+      </label>`;
+  }
+  if (widget.type === "ticker" || widget.type === "text") {
+    return `<label class="span-4"><span>${widget.type === "ticker" ? "Ticker text" : "Text"}</span><input data-field="text" value="${escapeHtml(widget.text)}" /></label>`;
+  }
+  if (widget.type === "iframe") {
+    return `
+      <label class="span-4"><span>Iframe URL</span><input data-field="url" placeholder="https://…" value="${escapeHtml(widget.url)}" /></label>
+      <label class="span-2"><span>Label</span><input data-field="label" value="${escapeHtml(widget.label)}" /></label>`;
+  }
+  return "";
+}
+
+function renderWidgetsEditor() {
+  const root = $("#widgets-editor");
+  if (!widgetsState.length) {
+    root.innerHTML = `<p class="empty-widgets">No widgets yet. Add an iframe, badge, clock, ticker, or text block.</p>`;
+    return;
+  }
+
+  root.innerHTML = widgetsState
+    .map((widget, index) => {
+      const presetOptions = Object.keys(WIDGET_PRESETS)
+        .map((key) => `<option value="${key}">${key}</option>`)
+        .join("");
+      return `
+      <article class="widget-card" data-index="${index}">
+        <div class="widget-card-head">
+          <div class="widget-card-title">${typeLabel(widget.type)} · <code>${escapeHtml(widget.id)}</code></div>
+          <div class="widget-card-actions">
+            <label class="check"><input type="checkbox" data-field="enabled" ${widget.enabled ? "checked" : ""} /> Enabled</label>
+            <button type="button" class="btn ghost" data-action="duplicate">Duplicate</button>
+            <button type="button" class="btn danger" data-action="remove">Remove</button>
+          </div>
+        </div>
+        <div class="widget-grid">
+          ${widgetFieldsHtml(widget)}
+          <div class="span-4 preset-row">
+            <label>
+              <span>Position preset</span>
+              <select data-action="preset">
+                <option value="">Custom</option>
+                ${presetOptions}
+              </select>
+            </label>
+            <p class="hint compact">Presets fill X/Y/Width/Height. You can still edit afterward.</p>
+          </div>
+          <label><span>X</span><input type="number" step="any" data-field="position.x" value="${widget.position.x}" /></label>
+          <label><span>Y</span><input type="number" step="any" data-field="position.y" value="${widget.position.y}" /></label>
+          <label><span>X unit</span>
+            <select data-field="position.xUnit">
+              <option value="%" ${widget.position.xUnit === "%" ? "selected" : ""}>%</option>
+              <option value="px" ${widget.position.xUnit === "px" ? "selected" : ""}>px</option>
+            </select>
+          </label>
+          <label><span>Y unit</span>
+            <select data-field="position.yUnit">
+              <option value="%" ${widget.position.yUnit === "%" ? "selected" : ""}>%</option>
+              <option value="px" ${widget.position.yUnit === "px" ? "selected" : ""}>px</option>
+            </select>
+          </label>
+          <label><span>Width</span><input type="number" step="any" data-field="size.width" value="${widget.size.width}" /></label>
+          <label><span>Height</span><input type="number" step="any" data-field="size.height" value="${widget.size.height}" /></label>
+          <label><span>Width unit</span>
+            <select data-field="size.widthUnit">
+              <option value="%" ${widget.size.widthUnit === "%" ? "selected" : ""}>%</option>
+              <option value="px" ${widget.size.widthUnit === "px" ? "selected" : ""}>px</option>
+            </select>
+          </label>
+          <label><span>Height unit</span>
+            <select data-field="size.heightUnit">
+              <option value="%" ${widget.size.heightUnit === "%" ? "selected" : ""}>%</option>
+              <option value="px" ${widget.size.heightUnit === "px" ? "selected" : ""}>px</option>
+            </select>
+          </label>
+          <label><span>Z-index</span><input type="number" data-field="zIndex" value="${widget.zIndex}" /></label>
+        </div>
+      </article>`;
+    })
+    .join("");
+}
+
+function setNested(obj, path, value) {
+  const parts = path.split(".");
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    cur = cur[parts[i]];
+  }
+  const last = parts[parts.length - 1];
+  if (["x", "y", "width", "height", "zIndex"].includes(last) || path.endsWith(".x") || path.endsWith(".y") || path.endsWith(".width") || path.endsWith(".height")) {
+    const n = Number(value);
+    cur[last] = Number.isNaN(n) ? value : n;
+  } else {
+    cur[last] = value;
+  }
+}
+
+function syncWidgetsFromDom() {
+  $$("#widgets-editor .widget-card").forEach((card) => {
+    const index = Number(card.dataset.index);
+    const widget = widgetsState[index];
+    if (!widget) return;
+    card.querySelectorAll("[data-field]").forEach((input) => {
+      const field = input.dataset.field;
+      if (input.type === "checkbox") {
+        setNested(widget, field, input.checked);
+      } else {
+        setNested(widget, field, input.value);
+      }
+    });
+  });
 }
 
 function fillSceneForm(cfg) {
@@ -94,17 +325,8 @@ function fillSceneForm(cfg) {
   $("#source-type").value = cfg.source?.type || "none";
   $("#source-url").value = cfg.source?.url || "";
 
-  const w = widgetMap(cfg);
-  $("#w-status").checked = !!w.status?.enabled;
-  $("#w-status-label").value = w.status?.label || "ON AIR";
-  $("#w-clock").checked = !!w.clock?.enabled;
-  $("#w-clock-tz").value = w.clock?.timezone || "UTC";
-  $("#w-ticker").checked = !!w.ticker?.enabled;
-  $("#w-ticker-text").value = w.ticker?.text || "";
-  $("#w-text").checked = !!w.text?.enabled;
-  $("#w-text-value").value = w.text?.text || "";
-  $("#w-iframe").checked = !!w.iframe?.enabled;
-  $("#w-iframe-url").value = w.iframe?.url || "";
+  widgetsState = (cfg.widgets || []).map((w) => normalizeWidget(w));
+  renderWidgetsEditor();
 
   $("#v-width").value = cfg.video?.width || 1280;
   $("#v-height").value = cfg.video?.height || 720;
@@ -113,6 +335,7 @@ function fillSceneForm(cfg) {
 }
 
 function readSceneForm() {
+  syncWidgetsFromDom();
   return {
     title: $("#scene-title").value.trim(),
     subtitle: $("#scene-subtitle").value.trim(),
@@ -125,44 +348,7 @@ function readSceneForm() {
       type: $("#source-type").value,
       url: $("#source-url").value.trim(),
     },
-    widgets: [
-      {
-        id: "clock",
-        type: "clock",
-        enabled: $("#w-clock").checked,
-        position: "top-right",
-        timezone: $("#w-clock-tz").value.trim() || "UTC",
-        format: "24h",
-      },
-      {
-        id: "ticker",
-        type: "ticker",
-        enabled: $("#w-ticker").checked,
-        position: "bottom",
-        text: $("#w-ticker-text").value.trim(),
-      },
-      {
-        id: "status",
-        type: "status",
-        enabled: $("#w-status").checked,
-        position: "top-left",
-        label: $("#w-status-label").value.trim() || "ON AIR",
-      },
-      {
-        id: "custom-text",
-        type: "text",
-        enabled: $("#w-text").checked,
-        position: "center",
-        text: $("#w-text-value").value.trim(),
-      },
-      {
-        id: "iframe",
-        type: "iframe",
-        enabled: $("#w-iframe").checked,
-        position: "full",
-        url: $("#w-iframe-url").value.trim(),
-      },
-    ],
+    widgets: widgetsState.map((w) => normalizeWidget(w)),
     brand: {
       name: $("#brand-name").value.trim() || "LIVE DESK",
       accent: $("#brand-accent").value || "#f0a202",
@@ -174,6 +360,64 @@ function readSceneForm() {
       bitrate: $("#v-bitrate").value.trim() || "2500k",
     },
   };
+}
+
+function bindWidgetEditor() {
+  $("#btn-add-widget").addEventListener("click", () => {
+    syncWidgetsFromDom();
+    const type = $("#add-widget-type").value;
+    widgetsState.push(createWidget(type));
+    renderWidgetsEditor();
+    setMsg(`Added ${typeLabel(type)} widget.`);
+  });
+
+  $("#widgets-editor").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn || btn.tagName === "SELECT") return;
+    const card = e.target.closest(".widget-card");
+    if (!card) return;
+    const index = Number(card.dataset.index);
+    syncWidgetsFromDom();
+
+    if (btn.dataset.action === "remove") {
+      widgetsState.splice(index, 1);
+      renderWidgetsEditor();
+      setMsg("Widget removed.");
+      return;
+    }
+    if (btn.dataset.action === "duplicate") {
+      const copy = normalizeWidget({
+        ...widgetsState[index],
+        id: uid(widgetsState[index].type),
+      });
+      // Nudge so duplicates don't stack exactly
+      copy.position.x = Number(copy.position.x) + 2;
+      copy.position.y = Number(copy.position.y) + 2;
+      widgetsState.splice(index + 1, 0, copy);
+      renderWidgetsEditor();
+      setMsg("Widget duplicated.");
+    }
+  });
+
+  $("#widgets-editor").addEventListener("change", (e) => {
+    const select = e.target.closest("select[data-action='preset']");
+    if (!select) return;
+    const card = select.closest(".widget-card");
+    const index = Number(card.dataset.index);
+    const preset = WIDGET_PRESETS[select.value];
+    if (!preset) return;
+    syncWidgetsFromDom();
+    widgetsState[index].position.x = preset.x;
+    widgetsState[index].position.y = preset.y;
+    widgetsState[index].position.xUnit = "%";
+    widgetsState[index].position.yUnit = "%";
+    widgetsState[index].size.width = preset.width;
+    widgetsState[index].size.height = preset.height;
+    widgetsState[index].size.widthUnit = "%";
+    widgetsState[index].size.heightUnit = "%";
+    renderWidgetsEditor();
+    setMsg(`Applied preset “${select.value}”.`);
+  });
 }
 
 async function encryptSecret(publicKey, secretValue) {
@@ -480,6 +724,7 @@ function bindForms() {
 bindTabs();
 hydrateFromStorage();
 bindForms();
+bindWidgetEditor();
 bootLocalConfig();
 
 if (loadConnection()?.token) {
