@@ -147,18 +147,23 @@
           </label>
         </fieldset>
 
-        <fieldset class="full block">
+        <fieldset class="full block widgets-block">
           <legend>Widgets</legend>
-          <label class="check"><input type="checkbox" id="w-status" /> ON AIR badge</label>
-          <label><span>Badge label</span><input id="w-status-label" value="ON AIR" /></label>
-          <label class="check"><input type="checkbox" id="w-clock" /> Clock</label>
-          <label><span>Timezone</span><input id="w-clock-tz" value="UTC" /></label>
-          <label class="check"><input type="checkbox" id="w-ticker" /> Ticker</label>
-          <label class="full"><span>Ticker text</span><input id="w-ticker-text" /></label>
-          <label class="check"><input type="checkbox" id="w-text" /> Custom text</label>
-          <label class="full"><span>Custom text</span><input id="w-text-value" /></label>
-          <label class="check"><input type="checkbox" id="w-iframe" /> Extra iframe widget</label>
-          <label class="full"><span>Iframe URL</span><input id="w-iframe-url" /></label>
+          <p class="hint compact">Add as many widgets as you want. Each has its own position, size, and content — including multiple iframes.</p>
+          <div class="widget-toolbar full">
+            <label>
+              <span>Add widget</span>
+              <select id="add-widget-type">
+                <option value="iframe">Iframe / website</option>
+                <option value="status">ON AIR badge</option>
+                <option value="clock">Clock</option>
+                <option value="ticker">Ticker</option>
+                <option value="text">Custom text</option>
+              </select>
+            </label>
+            <button type="button" class="btn primary" id="btn-add-widget">Add</button>
+          </div>
+          <div id="widgets-editor" class="widgets-editor full"></div>
         </fieldset>
 
         <fieldset class="full block">
