@@ -7,7 +7,7 @@
     "imageUrl": ""
   },
   "source": {
-    "type": "none",
+    "type": "website",
     "url": ""
   },
   "widgets": [
@@ -24,7 +24,7 @@
       "type": "ticker",
       "enabled": true,
       "position": "bottom",
-      "text": "Welcome to the stream ÃÂÃÂ· Powered by GitHub Actions"
+      "text": "Welcome to the stream · Powered by GitHub Actions"
     },
     {
       "id": "status",
