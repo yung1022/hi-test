@@ -40,7 +40,7 @@
       "enabled": true,
       "zIndex": 6,
       "label": "",
-      "text": "Welcome to the stream · Powered by GitHub Actions",
+      "text": "Welcome to the stream Â· Powered by GitHub Actions",
       "url": "",
       "timezone": "UTC",
       "format": "24h",
@@ -91,7 +91,7 @@
       "timezone": "UTC",
       "format": "24h",
       "position": {
-        "x": 5,
+        "x": 40,
         "y": 15,
         "xUnit": "%",
         "yUnit": "%"
@@ -114,16 +114,16 @@
       "timezone": "UTC",
       "format": "24h",
       "position": {
-        "x": 50,
-        "y": 50,
+        "x": 40,
+        "y": 40,
         "xUnit": "%",
         "yUnit": "%"
       },
       "size": {
-        "width": 100,
-        "height": 100,
-        "widthUnit": "%",
-        "heightUnit": "%"
+        "width": 300,
+        "height": 80,
+        "widthUnit": "px",
+        "heightUnit": "px"
       }
     }
   ],
