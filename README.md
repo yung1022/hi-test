@@ -41,7 +41,15 @@ Also create a **YouTube live stream** (or scheduled premiere) in YouTube Studio 
 
 ### 4. On-air screen
 
-In **On-air screen**, set brand, title, background, optional embedded website, and widgets (ON AIR badge, clock, ticker, custom text, iframe). **Save scene to repo** writes `config/stream-config.json`.
+In **On-air screen**, set brand, title, background, optional full-bleed embedded website, and **any number of widgets** (iframes, ON AIR badge, clock, ticker, custom text).
+
+Each widget has its own:
+
+- **Position** (X/Y with `%` or `px`, plus presets like top-left / right-panel / full)
+- **Size** (width/height with `%` or `px`)
+- **Amount** — add, duplicate, or remove freely (multiple iframes are supported)
+
+**Save scene to repo** writes `config/stream-config.json`.
 
 ### 5. Start / end
 
