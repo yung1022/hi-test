@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LIVE DESK — Stream Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand-lockup">
+      <p class="brand">LIVE DESK</p>
+      <p class="brand-sub">YouTube · GitHub Actions</p>
+    </div>
+    <div class="status-cluster">
+      <span id="conn-state" class="chip">Disconnected</span>
+      <span id="stream-state" class="chip chip-live">Idle</span>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero-panel">
+      <h1>Control the broadcast</h1>
+      <p class="lede">Connect a repo, store stream secrets, design the on-air screen, then start or stop the hourly handoff loop.</p>
+      <div class="hero-actions">
+        <button type="button" class="btn primary" id="btn-start">Start stream</button>
+        <button type="button" class="btn danger" id="btn-stop">End stream</button>
+        <button type="button" class="btn ghost" id="btn-refresh">Refresh status</button>
+      </div>
+      <p id="action-msg" class="action-msg" role="status"></p>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="connect" role="tab" aria-selected="true">Connect</button>
+      <button type="button" class="tab" data-tab="secrets" role="tab">Secrets</button>
+      <button type="button" class="tab" data-tab="scene" role="tab">On-air screen</button>
+      <button type="button" class="tab" data-tab="preview" role="tab">Preview</button>
+    </nav>
+
+    <section id="tab-connect" class="panel active">
+      <h2>Repository connection</h2>
+      <p class="hint">Your PAT stays in this browser (localStorage). Use a fine-grained token with Actions, Secrets, Variables, and Contents write on this repo.</p>
+      <form id="connect-form" class="form-grid">
+        <label>
+          <span>GitHub owner</span>
+          <input id="gh-owner" name="owner" placeholder="your-username" autocomplete="off" required />
+        </label>
+        <label>
+          <span>Repository</span>
+          <input id="gh-repo" name="repo" placeholder="hi-test" autocomplete="off" required />
+        </label>
+        <label class="full">
+          <span>Personal access token</span>
+          <input id="gh-token" name="token" type="password" placeholder="ghp_…" autocomplete="off" required />
+        </label>
+        <div class="form-actions full">
+          <button type="submit" class="btn primary">Save &amp; verify</button>
+          <button type="button" class="btn ghost" id="btn-clear-local">Clear local credentials</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="tab-secrets" class="panel">
+      <h2>Stream secrets</h2>
+      <p class="hint">Writes encrypted repository secrets via the GitHub API. The stream key never touches this repo’s git history.</p>
+      <form id="secrets-form" class="form-grid">
+        <label class="full">
+          <span>YouTube stream key</span>
+          <input id="yt-key" type="password" placeholder="xxxx-xxxx-xxxx-xxxx" autocomplete="off" />
+        </label>
+        <label class="full">
+          <span>YouTube RTMP URL <em>(optional)</em></span>
+          <input id="yt-rtmp" type="text" placeholder="rtmp://a.rtmp.youtube.com/live2" autocomplete="off" />
+        </label>
+        <label class="full">
+          <span>Stream control token <em>(optional PAT stored as STREAM_CONTROL_TOKEN)</em></span>
+          <input id="control-token" type="password" placeholder="Same PAT or a dedicated Actions token" autocomplete="off" />
+        </label>
+        <div class="form-actions full">
+          <button type="submit" class="btn primary">Push secrets to GitHub</button>
+        </div>
+      </form>
+      <ul class="secret-checklist" id="secret-checklist">
+        <li data-secret="YOUTUBE_STREAM_KEY">YOUTUBE_STREAM_KEY — unknown</li>
+        <li data-secret="YOUTUBE_RTMP_URL">YOUTUBE_RTMP_URL — unknown</li>
+        <li data-secret="STREAM_CONTROL_TOKEN">STREAM_CONTROL_TOKEN — unknown</li>
+      </ul>
+    </section>
+
+    <section id="tab-scene" class="panel">
+      <h2>On-air screen</h2>
+      <p class="hint">Saved to <code>config/stream-config.json</code> in the repo. The Actions runner captures this overlay (or an embedded site) and pushes it to YouTube.</p>
+      <form id="scene-form" class="form-grid">
+        <label>
+          <span>Brand name</span>
+          <input id="brand-name" />
+        </label>
+        <label>
+          <span>Accent color</span>
+          <input id="brand-accent" type="color" />
+        </label>
+        <label class="full">
+          <span>Title</span>
+          <input id="scene-title" />
+        </label>
+        <label class="full">
+          <span>Subtitle</span>
+          <input id="scene-subtitle" />
+        </label>
+
+        <fieldset class="full block">
+          <legend>Background</legend>
+          <label>
+            <span>Type</span>
+            <select id="bg-type">
+              <option value="gradient">Gradient / CSS</option>
+              <option value="image">Image URL</option>
+            </select>
+          </label>
+          <label class="full">
+            <span>Gradient / CSS value</span>
+            <input id="bg-value" />
+          </label>
+          <label class="full">
+            <span>Image URL</span>
+            <input id="bg-image" placeholder="https://…" />
+          </label>
+        </fieldset>
+
+        <fieldset class="full block">
+          <legend>Primary source</legend>
+          <label>
+            <span>Type</span>
+            <select id="source-type">
+              <option value="none">Overlay title only</option>
+              <option value="website">Embed website</option>
+            </select>
+          </label>
+          <label class="full">
+            <span>Website URL to show on stream</span>
+            <input id="source-url" placeholder="https://example.com" />
+          </label>
+        </fieldset>
+
+        <fieldset class="full block">
+          <legend>Widgets</legend>
+          <label class="check"><input type="checkbox" id="w-status" /> ON AIR badge</label>
+          <label><span>Badge label</span><input id="w-status-label" value="ON AIR" /></label>
+          <label class="check"><input type="checkbox" id="w-clock" /> Clock</label>
+          <label><span>Timezone</span><input id="w-clock-tz" value="UTC" /></label>
+          <label class="check"><input type="checkbox" id="w-ticker" /> Ticker</label>
+          <label class="full"><span>Ticker text</span><input id="w-ticker-text" /></label>
+          <label class="check"><input type="checkbox" id="w-text" /> Custom text</label>
+          <label class="full"><span>Custom text</span><input id="w-text-value" /></label>
+          <label class="check"><input type="checkbox" id="w-iframe" /> Extra iframe widget</label>
+          <label class="full"><span>Iframe URL</span><input id="w-iframe-url" /></label>
+        </fieldset>
+
+        <fieldset class="full block">
+          <legend>Video</legend>
+          <label><span>Width</span><input id="v-width" type="number" min="640" max="1920" /></label>
+          <label><span>Height</span><input id="v-height" type="number" min="360" max="1080" /></label>
+          <label><span>FPS</span><input id="v-fps" type="number" min="15" max="60" /></label>
+          <label><span>Bitrate</span><input id="v-bitrate" placeholder="2500k" /></label>
+        </fieldset>
+
+        <div class="form-actions full">
+          <button type="submit" class="btn primary">Save scene to repo</button>
+          <button type="button" class="btn ghost" id="btn-load-scene">Reload from repo</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="tab-preview" class="panel">
+      <h2>Overlay preview</h2>
+      <p class="hint">Local preview of the capture page the runner will open.</p>
+      <div class="preview-frame-wrap">
+        <iframe id="preview-frame" title="Overlay preview" src="../overlay/index.html"></iframe>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Hourly loop: <code>livestream.yml</code> → after ~55m triggers <code>continue-livestream.yml</code> → back again until you end the stream.</p>
+  </footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

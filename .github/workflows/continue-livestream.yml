@@ -1,0 +1,102 @@
+name: Continue Livestream
+
+# Continuation workflow: keeps the YouTube broadcast alive after the previous
+# segment. After ~55 minutes it triggers livestream.yml again (or itself),
+# forming an hourly handoff loop until STREAM_ACTIVE is set to false.
+
+on:
+  workflow_dispatch:
+    inputs:
+      segment:
+        description: Segment number
+        required: false
+        default: "2"
+      reason:
+        description: Why this run started
+        required: false
+        default: "hourly-handoff"
+  repository_dispatch:
+    types: [continue-stream]
+  workflow_call:
+    inputs:
+      segment:
+        type: string
+        required: false
+        default: "2"
+      reason:
+        type: string
+        required: false
+        default: "workflow-call"
+
+permissions:
+  contents: read
+  actions: write
+
+# Intentionally no concurrency group — overlaps with livestream.yml during handoff.
+
+jobs:
+  continue-stream:
+    name: Continue stream segment
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
+      YOUTUBE_RTMP_URL: ${{ secrets.YOUTUBE_RTMP_URL }}
+      SEGMENT_NUMBER: ${{ github.event.inputs.segment || github.event.client_payload.segment || inputs.segment || '2' }}
+      SEGMENT_MINUTES: "55"
+      HANDOFF_SECONDS: "90"
+      # Alternate back to the primary workflow so both files stay in the loop
+      CONTINUE_WORKFLOW: livestream.yml
+      GH_TOKEN: ${{ secrets.STREAM_CONTROL_TOKEN || secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.STREAM_CONTROL_TOKEN || secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Abort if stream was stopped
+        id: gate
+        run: |
+          val=$(gh variable get STREAM_ACTIVE --repo "$GITHUB_REPOSITORY" 2>/dev/null || echo "true")
+          echo "STREAM_ACTIVE=$val"
+          if [ "$val" = "false" ] || [ "$val" = "0" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Stream marked inactive — skipping continuation."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require stream key
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          if [ -z "$YOUTUBE_STREAM_KEY" ]; then
+            echo "::error::Set repository secret YOUTUBE_STREAM_KEY"
+            exit 1
+          fi
+
+      - name: Update status
+        if: steps.gate.outputs.skip != 'true'
+        continue-on-error: true
+        run: |
+          gh variable set STREAM_ACTIVE --body "true" --repo "$GITHUB_REPOSITORY"
+          gh variable set STREAM_SEGMENT --body "$SEGMENT_NUMBER" --repo "$GITHUB_REPOSITORY"
+          gh variable set STREAM_STATUS --body "live" --repo "$GITHUB_REPOSITORY"
+
+      - name: Install dependencies
+        if: steps.gate.outputs.skip != 'true'
+        run: bash scripts/check-deps.sh
+
+      - name: Run livestream segment
+        if: steps.gate.outputs.skip != 'true'
+        run: bash scripts/stream.sh
+
+      - name: Segment summary
+        if: always() && steps.gate.outputs.skip != 'true'
+        run: |
+          echo "Continuation segment ${SEGMENT_NUMBER} finished"
+          if [ -f /tmp/stream-stop.flag ]; then
+            gh variable set STREAM_STATUS --body "stopped" --repo "$GITHUB_REPOSITORY" || true
+            gh variable set STREAM_ACTIVE --body "false" --repo "$GITHUB_REPOSITORY" || true
+          elif [ -f /tmp/stream-segment-end.flag ]; then
+            gh variable set STREAM_STATUS --body "handing-off" --repo "$GITHUB_REPOSITORY" || true
+          fi

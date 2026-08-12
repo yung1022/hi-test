@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stream Overlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./overlay.css" />
+</head>
+<body>
+  <div id="stage">
+    <div id="bg"></div>
+    <iframe id="source-frame" title="Source" hidden></iframe>
+    <div id="veil"></div>
+
+    <header class="chrome top">
+      <div id="status-pill" class="pill" hidden>
+        <span class="dot"></span>
+        <span id="status-label">ON AIR</span>
+      </div>
+      <div id="brand" class="brand">LIVE DESK</div>
+      <div id="clock" class="clock" hidden>--</div>
+    </header>
+
+    <main id="center-copy" hidden>
+      <p id="title"></p>
+      <p id="subtitle"></p>
+      <p id="custom-text"></p>
+    </main>
+
+    <footer class="chrome bottom">
+      <div id="ticker" class="ticker" hidden>
+        <div id="ticker-track"></div>
+      </div>
+    </footer>
+  </div>
+  <script src="./overlay.js"></script>
+</body>
+</html>

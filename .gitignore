@@ -1,0 +1,7 @@
+# Ignore local credential scratch files if any appear
+.env
+.env.*
+*.pem
+.DS_Store
+node_modules/
+_site/
