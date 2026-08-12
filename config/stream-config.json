@@ -8,7 +8,7 @@
   },
   "source": {
     "type": "none",
-    "url": ""
+    "url": "https://livecounts.io/embed/youtube-live-subscriber-counter/UCjrii0S-8k6sfc_ds3V-mRg"
   },
   "widgets": [
     {
@@ -24,21 +24,21 @@
       "type": "ticker",
       "enabled": true,
       "position": "bottom",
-      "text": "Welcome to the stream · Powered by GitHub Actions"
+      "text": "Welcome to the stream Â· Powered by GitHub Actions"
     },
     {
       "id": "status",
       "type": "status",
-      "enabled": true,
+      "enabled": false,
       "position": "top-left",
       "label": "ON AIR"
     },
     {
       "id": "custom-text",
       "type": "text",
-      "enabled": false,
+      "enabled": true,
       "position": "center",
-      "text": "Custom message"
+      "text": "CurtisPlays' sub-bot status livestream (TEST STREAM)"
     },
     {
       "id": "iframe",
