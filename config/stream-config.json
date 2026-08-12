@@ -8,7 +8,7 @@
   },
   "source": {
     "type": "none",
-    "url": "https://livecounts.io/embed/youtube-live-subscriber-counter/UCjrii0S-8k6sfc_ds3V-mRg"
+    "url": ""
   },
   "widgets": [
     {
@@ -24,7 +24,7 @@
       "type": "ticker",
       "enabled": true,
       "position": "bottom",
-      "text": "Welcome to the stream Â· Powered by GitHub Actions"
+      "text": "Welcome to the stream ÃÂ· Powered by GitHub Actions"
     },
     {
       "id": "status",
@@ -45,7 +45,7 @@
       "type": "iframe",
       "enabled": true,
       "position": "full",
-      "url": "https://livecounts.io/embed/youtube-live-subscriber-counter/UCjrii0S-8k6sfc_ds3V-mRg"
+      "url": "<iframe height=\"80px\" width=\"300px\" frameborder=\"0\" src=https://livecounts.io/embed/youtube-live-subscriber-counter/UCjrii0S-8k6sfc_ds3V-mRg style=\"border: 0; width:300px; height:80px;\"></iframe>"
     }
   ],
   "brand": {
