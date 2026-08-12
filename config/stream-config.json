@@ -7,7 +7,7 @@
     "imageUrl": ""
   },
   "source": {
-    "type": "website",
+    "type": "none",
     "url": "https://livecounts.io/embed/youtube-live-subscriber-counter/UCjrii0S-8k6sfc_ds3V-mRg"
   },
   "widgets": [
@@ -43,9 +43,9 @@
     {
       "id": "iframe",
       "type": "iframe",
-      "enabled": false,
+      "enabled": true,
       "position": "full",
-      "url": ""
+      "url": "https://livecounts.io/embed/youtube-live-subscriber-counter/UCjrii0S-8k6sfc_ds3V-mRg"
     }
   ],
   "brand": {
