@@ -46,7 +46,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Virtual display
-Xvfb "$DISPLAY" -screen 0 "${WIDTH}x${HEIGHT}x24" -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
+Xvfb "$DISPLAY" -screen 0 "${WIDTH}x${HEIGHT}x24" -ac +extension RANDR -nocursor >/tmp/xvfb.log 2>&1 &
 XVFB_PID=$!
 sleep 1
 
