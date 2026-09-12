@@ -50,6 +50,18 @@ Xvfb "$DISPLAY" -screen 0 "${WIDTH}x${HEIGHT}x24" -ac +extension RANDR >/tmp/xvf
 XVFB_PID=$!
 sleep 1
 
+# Create the capture sink before Chromium starts so its audio is routed there.
+if command -v pulseaudio >/dev/null 2>&1; then
+  pulseaudio --daemonize --exit-idle-time=-1 --log-target=file:/tmp/pulse.log
+  sleep 1
+  if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
+    true
+  else
+    pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >/dev/null 2>&1 || true
+  fi
+  pactl set-default-sink stream_audio >/dev/null 2>&1 || true
+fi
+
 # Open overlay in Chromium (kiosk)
 CHROME_BIN="$(command -v google-chrome || command -v chromium-browser || command -v chromium || true)"
 if [[ -z "$CHROME_BIN" ]]; then
@@ -71,6 +83,9 @@ fi
   --no-first-run \
   --no-default-browser-check \
   --disable-translate \
+  --disable-background-timer-throttling \
+  --disable-renderer-backgrounding \
+  --disable-backgrounding-occluded-windows \
   --autoplay-policy=no-user-gesture-required \
   --user-data-dir=/tmp/chrome-stream-profile \
   "http://127.0.0.1:8765/overlay/" \
@@ -80,17 +95,6 @@ sleep 4
 
 # Audio: prefer the browser's real audio via PulseAudio monitor; fall back to silent audio
 # only if the monitor is unavailable so YouTube still accepts the ingest.
-if command -v pulseaudio >/dev/null 2>&1; then
-  pulseaudio --daemonize --exit-idle-time=-1 --log-target=file:/tmp/pulse.log
-  sleep 1
-  if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
-    true
-  else
-    pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >/dev/null 2>&1 || true
-  fi
-  pactl set-default-sink stream_audio >/dev/null 2>&1 || true
-fi
-
 if command -v pulseaudio >/dev/null 2>&1 && pactl list short modules 2>/dev/null | grep -q "module-null-sink"; then
   ffmpeg -hide_banner -loglevel error \
     -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
