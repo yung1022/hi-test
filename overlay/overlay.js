@@ -148,6 +148,58 @@ function createIframe(widget) {
   return el;
 }
 
+function youtubeVideoId(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "youtu.be") return parsed.pathname.slice(1).split("/")[0];
+    if (parsed.hostname.endsWith("youtube.com")) {
+      if (parsed.pathname === "/watch") return parsed.searchParams.get("v");
+      if (parsed.pathname.startsWith("/shorts/") || parsed.pathname.startsWith("/embed/")) {
+        return parsed.pathname.split("/")[2];
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function startMusic(cfg) {
+  const tracks = (cfg.music || [])
+    .filter((track) => track && track.enabled !== false)
+    .map((track) => ({ ...track, videoId: youtubeVideoId(track.url) }))
+    .filter((track) => track.videoId);
+  if (!tracks.length) return;
+
+  let index = 0;
+  const playerHost = document.createElement("div");
+  playerHost.id = "music-player";
+  document.body.appendChild(playerHost);
+
+  const createPlayer = () => {
+    if (!window.YT?.Player) {
+      window.setTimeout(createPlayer, 250);
+      return;
+    }
+    const player = new YT.Player(playerHost, {
+      width: "1",
+      height: "1",
+      videoId: tracks[index].videoId,
+      playerVars: { autoplay: 1, controls: 0, playsinline: 1, rel: 0 },
+      events: {
+        onReady: (event) => event.target.playVideo(),
+        onStateChange: (event) => {
+          if (event.data === YT.PlayerState.ENDED) {
+            index = (index + 1) % tracks.length;
+            event.target.loadVideoById(tracks[index].videoId);
+          }
+        },
+      },
+    });
+  };
+  createPlayer();
+}
+
 const factories = {
   status: createStatus,
   clock: createClock,
@@ -187,6 +239,7 @@ async function boot() {
     applyBackground(cfg);
     applySource(cfg);
     applyWidgets(cfg);
+    startMusic(cfg);
   } catch (err) {
     document.body.innerHTML = `<pre style="color:#fff;padding:40px">${err}</pre>`;
   }

@@ -121,6 +121,7 @@ const WIDGET_DEFAULTS = {
 };
 
 let widgetsState = [];
+let musicState = [];
 
 function uid(type) {
   return `${type}-${Math.random().toString(36).slice(2, 8)}`;
@@ -167,6 +168,15 @@ function normalizeWidget(raw = {}) {
 
 function createWidget(type) {
   return normalizeWidget({ type, ...WIDGET_DEFAULTS[type] });
+}
+
+function normalizeMusic(raw = {}) {
+  return {
+    id: raw.id || uid("track"),
+    title: raw.title || "",
+    url: raw.url || "",
+    enabled: raw.enabled !== false,
+  };
 }
 
 function typeLabel(type) {
@@ -283,6 +293,27 @@ function renderWidgetsEditor() {
     .join("");
 }
 
+function renderMusicEditor() {
+  const root = $("#music-editor");
+  if (!musicState.length) {
+    root.innerHTML = `<p class="empty-widgets">No music tracks yet. Add a YouTube URL to build the queue.</p>`;
+    return;
+  }
+
+  root.innerHTML = musicState.map((track, index) => `
+    <article class="music-card" data-index="${index}">
+      <div class="music-card-head">
+        <strong>Track ${index + 1}</strong>
+        <label class="check"><input type="checkbox" data-field="enabled" ${track.enabled ? "checked" : ""} /> Enabled</label>
+        <button type="button" class="btn danger" data-action="remove-music">Remove</button>
+      </div>
+      <div class="music-grid">
+        <label><span>Title <em>(optional)</em></span><input data-field="title" value="${escapeHtml(track.title)}" placeholder="Song title" /></label>
+        <label><span>YouTube URL</span><input data-field="url" type="url" value="${escapeHtml(track.url)}" placeholder="https://www.youtube.com/watch?v=..." required /></label>
+      </div>
+    </article>`).join("");
+}
+
 function setNested(obj, path, value) {
   const parts = path.split(".");
   let cur = obj;
@@ -327,6 +358,8 @@ function fillSceneForm(cfg) {
 
   widgetsState = (cfg.widgets || []).map((w) => normalizeWidget(w));
   renderWidgetsEditor();
+  musicState = (cfg.music || []).map((track) => normalizeMusic(track));
+  renderMusicEditor();
 
   $("#v-width").value = cfg.video?.width || 1280;
   $("#v-height").value = cfg.video?.height || 720;
@@ -336,6 +369,7 @@ function fillSceneForm(cfg) {
 
 function readSceneForm() {
   syncWidgetsFromDom();
+  syncMusicFromDom();
   return {
     title: $("#scene-title").value.trim(),
     subtitle: $("#scene-subtitle").value.trim(),
@@ -349,6 +383,7 @@ function readSceneForm() {
       url: $("#source-url").value.trim(),
     },
     widgets: widgetsState.map((w) => normalizeWidget(w)),
+    music: musicState.map((track) => normalizeMusic(track)),
     brand: {
       name: $("#brand-name").value.trim() || "LIVE DESK",
       accent: $("#brand-accent").value || "#f0a202",
@@ -360,6 +395,16 @@ function readSceneForm() {
       bitrate: $("#v-bitrate").value.trim() || "2500k",
     },
   };
+}
+
+function syncMusicFromDom() {
+  $$("#music-editor .music-card").forEach((card) => {
+    const track = musicState[Number(card.dataset.index)];
+    if (!track) return;
+    card.querySelectorAll("[data-field]").forEach((input) => {
+      track[input.dataset.field] = input.type === "checkbox" ? input.checked : input.value.trim();
+    });
+  });
 }
 
 function bindWidgetEditor() {
@@ -417,6 +462,24 @@ function bindWidgetEditor() {
     widgetsState[index].size.heightUnit = "%";
     renderWidgetsEditor();
     setMsg(`Applied preset “${select.value}”.`);
+  });
+}
+
+function bindMusicEditor() {
+  $("#btn-add-music").addEventListener("click", () => {
+    syncMusicFromDom();
+    musicState.push(normalizeMusic({ title: "", url: "" }));
+    renderMusicEditor();
+    setMsg("Added a YouTube track. Paste its URL, then save the scene.");
+  });
+
+  $("#music-editor").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action='remove-music']");
+    if (!btn) return;
+    syncMusicFromDom();
+    musicState.splice(Number(btn.closest(".music-card").dataset.index), 1);
+    renderMusicEditor();
+    setMsg("Music track removed.");
   });
 }
 
@@ -725,6 +788,7 @@ bindTabs();
 hydrateFromStorage();
 bindForms();
 bindWidgetEditor();
+bindMusicEditor();
 bootLocalConfig();
 
 if (loadConnection()?.token) {
