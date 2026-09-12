@@ -19,17 +19,17 @@
       "label": "",
       "text": "",
       "url": "",
-      "timezone": "UTC",
+      "timezone": "UTC+8",
       "format": "24h",
       "position": {
-        "x": 82,
+        "x": 35,
         "y": 3.5,
         "xUnit": "%",
         "yUnit": "%"
       },
       "size": {
-        "width": 15,
-        "height": 7,
+        "width": 30,
+        "height": 8,
         "widthUnit": "%",
         "heightUnit": "%"
       }
