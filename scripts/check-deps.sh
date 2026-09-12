@@ -7,6 +7,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ffmpeg \
   xvfb \
   x11-utils \
+  pulseaudio \
   fonts-liberation \
   ca-certificates \
   curl \

@@ -78,15 +78,39 @@ fi
 CHROME_PID=$!
 sleep 4
 
-# Audio: silent tone so YouTube accepts the ingest (required by many live endpoints)
-ffmpeg -hide_banner -loglevel error \
-  -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=44100" \
-  -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
-  -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
-  -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
-  -c:a aac -b:a 128k -ar 44100 \
-  -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
-  >/tmp/ffmpeg.log 2>&1 &
+# Audio: prefer the browser's real audio via PulseAudio monitor; fall back to silent audio
+# only if the monitor is unavailable so YouTube still accepts the ingest.
+if command -v pulseaudio >/dev/null 2>&1; then
+  pulseaudio --daemonize --exit-idle-time=-1 --log-target=file:/tmp/pulse.log
+  sleep 1
+  if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
+    true
+  else
+    pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >/dev/null 2>&1 || true
+  fi
+  pactl set-default-sink stream_audio >/dev/null 2>&1 || true
+fi
+
+if command -v pulseaudio >/dev/null 2>&1 && pactl list short modules 2>/dev/null | grep -q "module-null-sink"; then
+  ffmpeg -hide_banner -loglevel error \
+    -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+    -f pulse -i "stream_audio.monitor" \
+    -map 0:v:0 -map 1:a:0 \
+    -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
+    -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
+    -c:a aac -b:a 128k -ar 44100 \
+    -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
+    >/tmp/ffmpeg.log 2>&1 &
+else
+  ffmpeg -hide_banner -loglevel error \
+    -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=44100" \
+    -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+    -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
+    -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
+    -c:a aac -b:a 128k -ar 44100 \
+    -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
+    >/tmp/ffmpeg.log 2>&1 &
+fi
 FFMPEG_PID=$!
 echo "$FFMPEG_PID" > "$PID_FILE"
 echo "==> FFmpeg PID $FFMPEG_PID pushing to YouTube"
