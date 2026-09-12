@@ -25,6 +25,7 @@ fi
 STOP_FLAG="/tmp/stream-stop.flag"
 SEGMENT_END_FLAG="/tmp/stream-segment-end.flag"
 PID_FILE="/tmp/stream-ffmpeg.pid"
+UNCLUTTER_PID=""
 rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE"
 
 echo "==> Stream segment starting (${SEGMENT_MINUTES}m budget, ${WIDTH}x${HEIGHT}@${FPS})"
@@ -40,6 +41,7 @@ cleanup() {
   [[ -f "$PID_FILE" ]] && kill "$(cat "$PID_FILE")" 2>/dev/null || true
   kill "$HTTP_PID" 2>/dev/null || true
   kill "$CHROME_PID" 2>/dev/null || true
+  [[ -n "$UNCLUTTER_PID" ]] && kill "$UNCLUTTER_PID" 2>/dev/null || true
   kill "$XVFB_PID" 2>/dev/null || true
   pkill -f "chromium|chrome|ffmpeg|Xvfb" 2>/dev/null || true
 }
@@ -49,6 +51,8 @@ trap cleanup EXIT
 Xvfb "$DISPLAY" -screen 0 "${WIDTH}x${HEIGHT}x24" -ac +extension RANDR -nocursor >/tmp/xvfb.log 2>&1 &
 XVFB_PID=$!
 sleep 1
+unclutter -display "$DISPLAY" -idle 0 -root >/tmp/unclutter.log 2>&1 &
+UNCLUTTER_PID=$!
 
 # Create the capture sink before Chromium starts so its audio is routed there.
 if command -v pulseaudio >/dev/null 2>&1; then
@@ -78,7 +82,6 @@ fi
   --window-position=0,0 \
   --kiosk \
   --no-sandbox \
-  --disable-gpu \
   --disable-dev-shm-usage \
   --noerrdialogs \
   --disable-infobars \
@@ -100,10 +103,10 @@ sleep 4
 # only if the monitor is unavailable so YouTube still accepts the ingest.
 if command -v pulseaudio >/dev/null 2>&1 && pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
   ffmpeg -hide_banner -loglevel error \
-    -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
-    -f pulse -i "stream_audio.monitor" \
+    -thread_queue_size 512 -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+    -thread_queue_size 512 -f pulse -i "stream_audio.monitor" \
     -map 0:v:0 -map 1:a:0 \
-    -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
+    -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
     -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
     -c:a aac -b:a 128k -ar 44100 \
     -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
@@ -111,8 +114,8 @@ if command -v pulseaudio >/dev/null 2>&1 && pactl list short sinks 2>/dev/null |
 else
   ffmpeg -hide_banner -loglevel error \
     -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=44100" \
-    -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
-    -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
+    -thread_queue_size 512 -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+    -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
     -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
     -c:a aac -b:a 128k -ar 44100 \
     -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \

@@ -6,6 +6,7 @@ sudo apt-get update -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ffmpeg \
   xvfb \
+  unclutter-xfixes \
   x11-utils \
   pulseaudio \
   fonts-liberation \
