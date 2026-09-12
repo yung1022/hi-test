@@ -58,29 +58,6 @@
       }
     },
     {
-      "id": "ticker-ejjlce",
-      "type": "ticker",
-      "enabled": true,
-      "zIndex": 5,
-      "label": "",
-      "text": "Welcome to the stream",
-      "url": "",
-      "timezone": "UTC",
-      "format": "24h",
-      "position": {
-        "x": 0,
-        "y": 90,
-        "xUnit": "%",
-        "yUnit": "%"
-      },
-      "size": {
-        "width": 100,
-        "height": 8,
-        "widthUnit": "%",
-        "heightUnit": "%"
-      }
-    },
-    {
       "id": "text-guau15",
       "type": "text",
       "enabled": true,
