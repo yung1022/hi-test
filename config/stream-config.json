@@ -68,13 +68,13 @@
       "timezone": "UTC",
       "format": "24h",
       "position": {
-        "x": 35,
+        "x": 20,
         "y": 1,
         "xUnit": "%",
         "yUnit": "%"
       },
       "size": {
-        "width": 60,
+        "width": 75,
         "height": 8,
         "widthUnit": "%",
         "heightUnit": "%"
