@@ -63,13 +63,13 @@
       "enabled": true,
       "zIndex": 5,
       "label": "",
-      "text": "Discord FYSC - Season 3 | Join Discord Server pinned below to add yourself",
+      "text": "Discord FYSC - Season 3 | Instruction in pinned message",
       "url": "",
       "timezone": "UTC",
       "format": "24h",
       "position": {
         "x": 20,
-        "y": 1,
+        "y": 0.5,
         "xUnit": "%",
         "yUnit": "%"
       },
