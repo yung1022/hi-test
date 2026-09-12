@@ -56,9 +56,81 @@
         "widthUnit": "%",
         "heightUnit": "%"
       }
+    },
+    {
+      "id": "text-guau15",
+      "type": "text",
+      "enabled": true,
+      "zIndex": 5,
+      "label": "",
+      "text": "Discord FYSC - Season 3 | Instruction in pinned message",
+      "url": "",
+      "timezone": "UTC",
+      "format": "24h",
+      "position": {
+        "x": 15,
+        "y": 0.5,
+        "xUnit": "%",
+        "yUnit": "%"
+      },
+      "size": {
+        "width": 75,
+        "height": 8,
+        "widthUnit": "%",
+        "heightUnit": "%"
+      }
     }
   ],
-  "music": [],
+  "music": [
+    {
+      "id": "track-hnn18q",
+      "title": "",
+      "url": "https://youtu.be/JNl1_hRwpXE",
+      "enabled": true
+    },
+    {
+      "id": "track-bpfsa7",
+      "title": "",
+      "url": "https://youtu.be/BLO6LRPMUp8",
+      "enabled": true
+    },
+    {
+      "id": "track-eyji0c",
+      "title": "",
+      "url": "https://youtu.be/hm0POP-uUY4",
+      "enabled": true
+    },
+    {
+      "id": "track-w8u8he",
+      "title": "",
+      "url": "https://youtu.be/ANygbRCuwZo",
+      "enabled": true
+    },
+    {
+      "id": "track-gfr3wx",
+      "title": "",
+      "url": "https://youtu.be/SvRFNNbxuAk",
+      "enabled": true
+    },
+    {
+      "id": "track-bf6rdj",
+      "title": "",
+      "url": "https://youtu.be/kHLQF8_NFrM",
+      "enabled": true
+    },
+    {
+      "id": "track-c6y4ze",
+      "title": "",
+      "url": "https://youtu.be/bzehQ60b3XI",
+      "enabled": true
+    },
+    {
+      "id": "track-fbn8rx",
+      "title": "",
+      "url": "https://youtu.be/pFptt7Cargc",
+      "enabled": true
+    }
+  ],
   "brand": {
     "name": "CurtisPlays",
     "accent": "#f0a202"
