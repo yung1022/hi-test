@@ -60,6 +60,9 @@ if command -v pulseaudio >/dev/null 2>&1; then
     pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >/dev/null 2>&1 || true
   fi
   pactl set-default-sink stream_audio >/dev/null 2>&1 || true
+  # Force Chromium's PulseAudio client onto the sink, even if the runner has
+  # another default sink or a stale per-application routing preference.
+  export PULSE_SINK=stream_audio
 fi
 
 # Open overlay in Chromium (kiosk)
@@ -95,7 +98,7 @@ sleep 4
 
 # Audio: prefer the browser's real audio via PulseAudio monitor; fall back to silent audio
 # only if the monitor is unavailable so YouTube still accepts the ingest.
-if command -v pulseaudio >/dev/null 2>&1 && pactl list short modules 2>/dev/null | grep -q "module-null-sink"; then
+if command -v pulseaudio >/dev/null 2>&1 && pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
   ffmpeg -hide_banner -loglevel error \
     -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
     -f pulse -i "stream_audio.monitor" \
