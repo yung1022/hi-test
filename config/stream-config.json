@@ -35,116 +35,24 @@
       }
     },
     {
-      "id": "ticker-1",
-      "type": "ticker",
+      "id": "iframe-7la5td",
+      "type": "iframe",
       "enabled": true,
-      "zIndex": 6,
-      "label": "",
-      "text": "Welcome to the stream ÃÂ· Powered by GitHub Actions",
-      "url": "",
+      "zIndex": 5,
+      "label": "Embed",
+      "text": "",
+      "url": "https://the-final-fysc.vercel.app/leaderboard/index.html",
       "timezone": "UTC",
       "format": "24h",
       "position": {
         "x": 0,
-        "y": 90,
+        "y": 0,
         "xUnit": "%",
         "yUnit": "%"
       },
       "size": {
         "width": 100,
-        "height": 8,
-        "widthUnit": "%",
-        "heightUnit": "%"
-      }
-    },
-    {
-      "id": "status-1",
-      "type": "status",
-      "enabled": false,
-      "zIndex": 6,
-      "label": "ON AIR",
-      "text": "",
-      "url": "",
-      "timezone": "UTC",
-      "format": "24h",
-      "position": {
-        "x": 2.5,
-        "y": 3.5,
-        "xUnit": "%",
-        "yUnit": "%"
-      },
-      "size": {
-        "width": 12,
-        "height": 7,
-        "widthUnit": "%",
-        "heightUnit": "%"
-      }
-    },
-    {
-      "id": "text-1",
-      "type": "text",
-      "enabled": true,
-      "zIndex": 6,
-      "label": "",
-      "text": "CurtisPlays' sub-bot status livestream (TEST STREAM)",
-      "url": "",
-      "timezone": "UTC",
-      "format": "24h",
-      "position": {
-        "x": 25,
-        "y": 15,
-        "xUnit": "%",
-        "yUnit": "%"
-      },
-      "size": {
-        "width": 50,
-        "height": 12,
-        "widthUnit": "%",
-        "heightUnit": "%"
-      }
-    },
-    {
-      "id": "iframe-1",
-      "type": "iframe",
-      "enabled": true,
-      "zIndex": 4,
-      "label": "Live subscriber count",
-      "text": "",
-      "url": "https://socialcounts.org/youtube-live-subscriber-count/UCjrii0S-8k6sfc_ds3V-mRg/embed",
-      "timezone": "UTC",
-      "format": "24h",
-      "position": {
-        "x": 40,
-        "y": 30,
-        "xUnit": "%",
-        "yUnit": "%"
-      },
-      "size": {
-        "width": 300,
-        "height": 15,
-        "widthUnit": "px",
-        "heightUnit": "%"
-      }
-    },
-    {
-      "id": "iframe-iua5st",
-      "type": "iframe",
-      "enabled": true,
-      "zIndex": 4,
-      "label": "Live subscriber count",
-      "text": "",
-      "url": "https://socialcounts.org/youtube-live-subscriber-count/UCjrii0S-8k6sfc_ds3V-mRg/embed?graph=true",
-      "timezone": "UTC",
-      "format": "24h",
-      "position": {
-        "x": 20,
-        "y": 45,
-        "xUnit": "%",
-        "yUnit": "%"
-      },
-      "size": {
-        "width": 60,
-        "height": 45,
+        "height": 100,
         "widthUnit": "%",
         "heightUnit": "%"
       }
