@@ -110,7 +110,7 @@ fi
 # only if the monitor is unavailable so YouTube still accepts the ingest.
 if command -v pulseaudio >/dev/null 2>&1 && pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
   ffmpeg -hide_banner -loglevel error \
-    -thread_queue_size 512 -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+    -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
     -thread_queue_size 512 -f pulse -i "stream_audio.monitor" \
     -map 0:v:0 -map 1:a:0 \
     -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
@@ -121,7 +121,7 @@ if command -v pulseaudio >/dev/null 2>&1 && pactl list short sinks 2>/dev/null |
 else
   ffmpeg -hide_banner -loglevel error \
     -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=44100" \
-    -thread_queue_size 512 -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+    -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
     -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
     -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
     -c:a aac -b:a 128k -ar 44100 \

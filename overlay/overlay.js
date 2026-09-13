@@ -185,13 +185,24 @@ function startMusic(cfg) {
       width: "1",
       height: "1",
       videoId: tracks[index].videoId,
-      playerVars: { autoplay: 1, controls: 0, playsinline: 1, rel: 0 },
+      playerVars: {
+        autoplay: 1,
+        controls: 0,
+        enablejsapi: 1,
+        origin: window.location.origin,
+        playsinline: 1,
+        rel: 0,
+      },
       events: {
         onReady: (event) => {
-          event.target.setVolume(100);
-          event.target.unMute();
+          const iframe = event.target.getIframe();
+          iframe.setAttribute("allow", "autoplay; encrypted-media");
+          event.target.mute();
           event.target.playVideo();
+          event.target.setVolume(100);
+          window.setTimeout(() => event.target.unMute(), 250);
         },
+        onAutoplayBlocked: () => console.error("Music autoplay was blocked"),
         onError: (event) => {
           console.error("Music player error", event.data);
           index = (index + 1) % tracks.length;
