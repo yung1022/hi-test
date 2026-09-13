@@ -66,6 +66,11 @@ if command -v pulseaudio >/dev/null 2>&1; then
     pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >/dev/null 2>&1 || true
   fi
   pactl set-default-sink stream_audio >/dev/null 2>&1 || true
+  if ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
+    echo "ERROR: PulseAudio stream_audio sink was not created" >&2
+    cat /tmp/pulse.log >&2 || true
+    exit 1
+  fi
   # Force Chromium's PulseAudio client onto the sink, even if the runner has
   # another default sink or a stale per-application routing preference.
   export PULSE_SINK=stream_audio

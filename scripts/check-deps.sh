@@ -10,6 +10,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   xdotool \
   x11-utils \
   pulseaudio \
+  pulseaudio-utils \
   fonts-liberation \
   ca-certificates \
   curl \

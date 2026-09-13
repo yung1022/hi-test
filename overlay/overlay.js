@@ -174,6 +174,7 @@ function startMusic(cfg) {
   let index = 0;
   const playerHost = document.createElement("div");
   playerHost.id = "music-player";
+  playerHost.setAttribute("allow", "autoplay; encrypted-media; fullscreen");
   document.body.appendChild(playerHost);
 
   const createPlayer = () => {
@@ -185,22 +186,21 @@ function startMusic(cfg) {
       width: "1",
       height: "1",
       videoId: tracks[index].videoId,
+      host: "https://www.youtube-nocookie.com",
       playerVars: {
         autoplay: 1,
         controls: 0,
         enablejsapi: 1,
+        mute: 0,
         origin: window.location.origin,
         playsinline: 1,
         rel: 0,
       },
       events: {
         onReady: (event) => {
-          const iframe = event.target.getIframe();
-          iframe.setAttribute("allow", "autoplay; encrypted-media");
-          event.target.mute();
-          event.target.playVideo();
           event.target.setVolume(100);
-          window.setTimeout(() => event.target.unMute(), 250);
+          event.target.unMute();
+          event.target.playVideo();
         },
         onAutoplayBlocked: () => console.error("Music autoplay was blocked"),
         onError: (event) => {
@@ -212,6 +212,8 @@ function startMusic(cfg) {
           if (event.data === YT.PlayerState.ENDED) {
             index = (index + 1) % tracks.length;
             event.target.loadVideoById(tracks[index].videoId);
+          } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.CUED) {
+            event.target.playVideo();
           }
         },
       },
