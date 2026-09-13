@@ -28,8 +28,9 @@ STOP_FLAG="/tmp/stream-stop.flag"
 SEGMENT_END_FLAG="/tmp/stream-segment-end.flag"
 PID_FILE="/tmp/stream-ffmpeg.pid"
 AUDIO_LOG="/tmp/audio.log"
+PULSE_SOCKET="/tmp/stream-pulse-$UID.sock"
 UNCLUTTER_PID=""
-rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE"
+rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE" "$PULSE_SOCKET"
 : > "$AUDIO_LOG"
 
 audio_log() {
@@ -51,6 +52,7 @@ cleanup() {
   kill "$CHROME_PID" 2>/dev/null || true
   [[ -n "$UNCLUTTER_PID" ]] && kill "$UNCLUTTER_PID" 2>/dev/null || true
   kill "$XVFB_PID" 2>/dev/null || true
+  rm -f "$PULSE_SOCKET"
   pkill -f "chromium|chrome|ffmpeg|Xvfb" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -65,7 +67,9 @@ UNCLUTTER_PID=$!
 # Create the capture sink before Chromium starts so its audio is routed there.
 if command -v pulseaudio >/dev/null 2>&1; then
   audio_log "Starting PulseAudio"
-  pulseaudio --daemonize --exit-idle-time=-1 --log-target=file:/tmp/pulse.log
+  export PULSE_SERVER="unix:$PULSE_SOCKET"
+  pulseaudio --daemonize --exit-idle-time=-1 --log-target=file:/tmp/pulse.log \
+    --load="module-native-protocol-unix socket=$PULSE_SOCKET auth-anonymous=1"
   sleep 1
   if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
     audio_log "PulseAudio stream_audio sink already exists"
@@ -123,9 +127,15 @@ sleep 4
 # Confirm Chromium opened an audio stream before FFmpeg starts reading the
 # monitor. A healthy sink alone can still produce silence.
 if command -v pactl >/dev/null 2>&1; then
-  AUDIO_INPUTS="$(pactl list short sink-inputs 2>/dev/null || true)"
+  AUDIO_INPUTS=""
+  for attempt in {1..30}; do
+    AUDIO_INPUTS="$(pactl list short sink-inputs 2>/dev/null || true)"
+    [[ -n "$AUDIO_INPUTS" ]] && break
+    audio_log "Waiting for Chromium PulseAudio sink input ($attempt/30)"
+    sleep 1
+  done
   if [[ -z "$AUDIO_INPUTS" ]]; then
-    audio_log "ERROR: Chromium did not create a PulseAudio sink input"
+    audio_log "ERROR: Chromium did not create a PulseAudio sink input after 30 seconds"
     echo "ERROR: Chromium did not create a PulseAudio sink input; see $AUDIO_LOG" >&2
     cat /tmp/chrome.log >&2 || true
     exit 1
