@@ -187,7 +187,16 @@ function startMusic(cfg) {
       videoId: tracks[index].videoId,
       playerVars: { autoplay: 1, controls: 0, playsinline: 1, rel: 0 },
       events: {
-        onReady: (event) => event.target.playVideo(),
+        onReady: (event) => {
+          event.target.setVolume(100);
+          event.target.unMute();
+          event.target.playVideo();
+        },
+        onError: (event) => {
+          console.error("Music player error", event.data);
+          index = (index + 1) % tracks.length;
+          event.target.loadVideoById(tracks[index].videoId);
+        },
         onStateChange: (event) => {
           if (event.data === YT.PlayerState.ENDED) {
             index = (index + 1) % tracks.length;

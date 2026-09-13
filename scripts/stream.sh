@@ -15,6 +15,8 @@ WIDTH="$(python3 -c "import json;print(json.load(open('$CONFIG'))['video']['widt
 HEIGHT="$(python3 -c "import json;print(json.load(open('$CONFIG'))['video']['height'])")"
 FPS="$(python3 -c "import json;print(json.load(open('$CONFIG'))['video']['fps'])")"
 BITRATE="$(python3 -c "import json;print(json.load(open('$CONFIG'))['video']['bitrate'])")"
+SCREEN_WIDTH=$((WIDTH + 100))
+SCREEN_HEIGHT=$((HEIGHT + 100))
 
 YOUTUBE_RTMP_URL="${YOUTUBE_RTMP_URL:-rtmp://a.rtmp.youtube.com/live2}"
 if [[ -z "${YOUTUBE_STREAM_KEY:-}" ]]; then
@@ -48,7 +50,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Virtual display
-Xvfb "$DISPLAY" -screen 0 "${WIDTH}x${HEIGHT}x24" -ac +extension RANDR -nocursor >/tmp/xvfb.log 2>&1 &
+Xvfb "$DISPLAY" -screen 0 "${SCREEN_WIDTH}x${SCREEN_HEIGHT}x24" -ac +extension RANDR -nocursor >/tmp/xvfb.log 2>&1 &
 XVFB_PID=$!
 sleep 1
 unclutter -display "$DISPLAY" -idle 0 -root >/tmp/unclutter.log 2>&1 &
@@ -98,6 +100,11 @@ fi
   >/tmp/chrome.log 2>&1 &
 CHROME_PID=$!
 sleep 4
+
+# Keep the X11 pointer out of the captured content.
+if command -v xdotool >/dev/null 2>&1; then
+  xdotool mousemove --display "$DISPLAY" "$((WIDTH + 50))" "$((HEIGHT + 50))" >/dev/null 2>&1 || true
+fi
 
 # Audio: prefer the browser's real audio via PulseAudio monitor; fall back to silent audio
 # only if the monitor is unavailable so YouTube still accepts the ingest.
