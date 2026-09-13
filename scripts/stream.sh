@@ -98,6 +98,7 @@ if command -v pulseaudio >/dev/null 2>&1; then
   # Force Chromium's PulseAudio client onto the sink, even if the runner has
   # another default sink or a stale per-application routing preference.
   export PULSE_SINK=stream_audio
+  export PULSE_LATENCY_MSEC=60
 fi
 
 # Open overlay in Chromium (kiosk)
@@ -121,8 +122,10 @@ fi
   --no-default-browser-check \
   --enable-logging=stderr \
   --log-level=0 \
+  --disable-features=AudioServiceOutOfProcess,PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies \
+  --audio-service-sandbox=false \
+  --audio-output-channels=2 \
   --disable-translate \
-  --disable-features=PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies \
   --disable-background-timer-throttling \
   --disable-renderer-backgrounding \
   --disable-backgrounding-occluded-windows \
@@ -145,6 +148,10 @@ if command -v pactl >/dev/null 2>&1; then
   done
   if [[ -z "$AUDIO_INPUTS" ]]; then
     audio_log "ERROR: Chromium did not create a PulseAudio sink input after 30 seconds"
+    audio_log "PulseAudio clients:"
+    pactl list short clients >> "$AUDIO_LOG" 2>&1 || true
+    audio_log "PulseAudio sink inputs:"
+    pactl list sink-inputs >> "$AUDIO_LOG" 2>&1 || true
     echo "ERROR: Chromium did not create a PulseAudio sink input; see $AUDIO_LOG" >&2
     cat /tmp/chrome.log >&2 || true
     exit 1

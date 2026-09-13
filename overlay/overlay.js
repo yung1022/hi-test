@@ -169,7 +169,11 @@ function startMusic(cfg) {
     .filter((track) => track && track.enabled !== false)
     .map((track) => ({ ...track, videoId: youtubeVideoId(track.url) }))
     .filter((track) => track.videoId);
-  if (!tracks.length) return;
+  if (!tracks.length) {
+    console.error("Music queue has no playable YouTube tracks");
+    return;
+  }
+  console.info("Music queue loaded", tracks.map((track) => track.videoId));
 
   let index = 0;
   const playerHost = document.createElement("div");
@@ -206,6 +210,7 @@ function startMusic(cfg) {
       },
       events: {
         onReady: (event) => {
+          console.info("Music player ready", tracks[index].videoId);
           event.target.setVolume(100);
           event.target.unMute();
           event.target.playVideo();
@@ -217,11 +222,12 @@ function startMusic(cfg) {
           event.target.loadVideoById(tracks[index].videoId);
         },
         onStateChange: (event) => {
+          console.info("Music player state", event.data);
           if (event.data === YT.PlayerState.ENDED) {
             index = (index + 1) % tracks.length;
             event.target.loadVideoById(tracks[index].videoId);
           } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.CUED) {
-            event.target.playVideo();
+            window.setTimeout(() => event.target.playVideo(), 500);
           }
         },
       },
