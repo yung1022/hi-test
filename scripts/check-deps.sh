@@ -9,7 +9,9 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   unclutter-xfixes \
   xdotool \
   x11-utils \
-  pulseaudio \
+  pipewire \
+  pipewire-pulse \
+  wireplumber \
   pulseaudio-utils \
   fonts-liberation \
   ca-certificates \

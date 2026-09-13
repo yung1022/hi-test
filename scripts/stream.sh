@@ -29,8 +29,16 @@ SEGMENT_END_FLAG="/tmp/stream-segment-end.flag"
 PID_FILE="/tmp/stream-ffmpeg.pid"
 AUDIO_LOG="/tmp/audio.log"
 PULSE_SOCKET="/tmp/stream-pulse-$UID.sock"
+AUDIO_RUNTIME="/tmp/stream-audio-runtime-$UID"
+PIPEWIRE_PID=""
+PIPEWIRE_PULSE_PID=""
+WIREPLUMBER_PID=""
 UNCLUTTER_PID=""
 rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE" "$PULSE_SOCKET"
+rm -rf "$AUDIO_RUNTIME"
+mkdir -p "$AUDIO_RUNTIME"
+mkdir -p "$AUDIO_RUNTIME/pulse"
+chmod 700 "$AUDIO_RUNTIME"
 : > "$AUDIO_LOG"
 
 audio_log() {
@@ -53,6 +61,10 @@ cleanup() {
   [[ -n "$UNCLUTTER_PID" ]] && kill "$UNCLUTTER_PID" 2>/dev/null || true
   kill "$XVFB_PID" 2>/dev/null || true
   rm -f "$PULSE_SOCKET"
+  [[ -n "$WIREPLUMBER_PID" ]] && kill "$WIREPLUMBER_PID" 2>/dev/null || true
+  [[ -n "$PIPEWIRE_PULSE_PID" ]] && kill "$PIPEWIRE_PULSE_PID" 2>/dev/null || true
+  [[ -n "$PIPEWIRE_PID" ]] && kill "$PIPEWIRE_PID" 2>/dev/null || true
+  rm -rf "$AUDIO_RUNTIME"
   pkill -f "chromium|chrome|ffmpeg|Xvfb" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -64,41 +76,59 @@ sleep 1
 unclutter -display "$DISPLAY" -idle 0 -root >/tmp/unclutter.log 2>&1 &
 UNCLUTTER_PID=$!
 
-# Create the capture sink before Chromium starts so its audio is routed there.
-if command -v pulseaudio >/dev/null 2>&1; then
-  audio_log "Starting PulseAudio"
-  export PULSE_SERVER="unix:$PULSE_SOCKET"
+# Create the capture sink before Chromium starts through PipeWire's PulseAudio
+# compatibility server. Chromium and FFmpeg can both use pactl/stream names,
+# while PipeWire owns the actual audio graph.
+if command -v pipewire >/dev/null 2>&1 && command -v pipewire-pulse >/dev/null 2>&1; then
+  audio_log "Starting PipeWire audio backend"
+  export XDG_RUNTIME_DIR="$AUDIO_RUNTIME"
+  unset DBUS_SESSION_BUS_ADDRESS DBUS_STARTER_ADDRESS DBUS_STARTER_BUS_TYPE
+  pipewire --daemon >/tmp/pipewire.log 2>&1 &
+  PIPEWIRE_PID=$!
+  pipewire-pulse --daemon >/tmp/pipewire-pulse.log 2>&1 &
+  PIPEWIRE_PULSE_PID=$!
+  if command -v wireplumber >/dev/null 2>&1; then
+    wireplumber --daemon >/tmp/wireplumber.log 2>&1 &
+    WIREPLUMBER_PID=$!
+  fi
+  export PULSE_SERVER="unix:$AUDIO_RUNTIME/pulse/native"
+  export PULSE_SINK=stream_audio
+  export PULSE_LATENCY_MSEC=60
+  sleep 2
+  audio_log "PipeWire server: $PULSE_SERVER"
+else
+  audio_log "ERROR: PipeWire packages are unavailable"
+  exit 1
+fi
+
+if command -v pactl >/dev/null 2>&1; then
   # GitHub runners may provide a malformed desktop-session bus address.
   # Chromium does not need D-Bus for this capture and the bad value obscures
   # the real audio diagnostics.
   unset DBUS_SESSION_BUS_ADDRESS DBUS_STARTER_ADDRESS DBUS_STARTER_BUS_TYPE
-  pulseaudio --daemonize --exit-idle-time=-1 --log-target=file:/tmp/pulse.log \
-    --load="module-native-protocol-unix socket=$PULSE_SOCKET auth-anonymous=1"
-  sleep 1
   if ! pactl info >> "$AUDIO_LOG" 2>&1; then
     audio_log "ERROR: pactl could not connect to $PULSE_SERVER"
-    cat /tmp/pulse.log >&2 || true
+    cat /tmp/pipewire.log /tmp/pipewire-pulse.log /tmp/wireplumber.log >&2 2>/dev/null || true
     exit 1
   fi
   if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
-    audio_log "PulseAudio stream_audio sink already exists"
+    audio_log "PipeWire pulse-compat stream_audio sink already exists"
     true
   else
-    audio_log "Creating PulseAudio stream_audio null sink"
+    audio_log "Creating PipeWire pulse-compat stream_audio null sink"
     pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not create stream_audio"
   fi
   pactl set-default-sink stream_audio >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not set stream_audio as default sink"
   if ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
     audio_log "ERROR: PulseAudio stream_audio sink was not created"
     echo "ERROR: PulseAudio stream_audio sink was not created; see $AUDIO_LOG" >&2
-    cat /tmp/pulse.log >&2 || true
+    cat /tmp/pipewire.log /tmp/pipewire-pulse.log /tmp/wireplumber.log >&2 2>/dev/null || true
     exit 1
   fi
   pactl list short sinks >> "$AUDIO_LOG" 2>&1 || true
-  # Force Chromium's PulseAudio client onto the sink, even if the runner has
-  # another default sink or a stale per-application routing preference.
-  export PULSE_SINK=stream_audio
-  export PULSE_LATENCY_MSEC=60
+else
+  audio_log "ERROR: pactl is unavailable"
+  exit 1
 fi
 
 # Open overlay in Chromium (kiosk)
@@ -171,7 +201,7 @@ if command -v xdotool >/dev/null 2>&1; then
   xdotool mousemove --display "$DISPLAY" "$((WIDTH + 50))" "$((HEIGHT + 50))" >/dev/null 2>&1 || true
 fi
 
-if ! command -v pulseaudio >/dev/null 2>&1 || ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
+if ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
   audio_log "ERROR: real audio capture is unavailable; refusing to stream silent audio"
   echo "ERROR: real audio capture is unavailable; see $AUDIO_LOG" >&2
   exit 1
