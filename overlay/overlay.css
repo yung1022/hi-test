@@ -18,6 +18,16 @@ html, body {
   font-family: "IBM Plex Sans", sans-serif;
 }
 
+#music-player {
+  position: fixed;
+  left: -10px;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  opacity: 0.01;
+  pointer-events: none;
+}
+
 #stage {
   position: relative;
   width: var(--stage-w);

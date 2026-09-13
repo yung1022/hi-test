@@ -27,8 +27,14 @@ fi
 STOP_FLAG="/tmp/stream-stop.flag"
 SEGMENT_END_FLAG="/tmp/stream-segment-end.flag"
 PID_FILE="/tmp/stream-ffmpeg.pid"
+AUDIO_LOG="/tmp/audio.log"
 UNCLUTTER_PID=""
 rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE"
+: > "$AUDIO_LOG"
+
+audio_log() {
+  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*" >> "$AUDIO_LOG"
+}
 
 echo "==> Stream segment starting (${SEGMENT_MINUTES}m budget, ${WIDTH}x${HEIGHT}@${FPS})"
 echo "==> Overlay: $OVERLAY_DIR"
@@ -58,19 +64,24 @@ UNCLUTTER_PID=$!
 
 # Create the capture sink before Chromium starts so its audio is routed there.
 if command -v pulseaudio >/dev/null 2>&1; then
+  audio_log "Starting PulseAudio"
   pulseaudio --daemonize --exit-idle-time=-1 --log-target=file:/tmp/pulse.log
   sleep 1
   if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
+    audio_log "PulseAudio stream_audio sink already exists"
     true
   else
-    pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >/dev/null 2>&1 || true
+    audio_log "Creating PulseAudio stream_audio null sink"
+    pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not create stream_audio"
   fi
-  pactl set-default-sink stream_audio >/dev/null 2>&1 || true
+  pactl set-default-sink stream_audio >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not set stream_audio as default sink"
   if ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
-    echo "ERROR: PulseAudio stream_audio sink was not created" >&2
+    audio_log "ERROR: PulseAudio stream_audio sink was not created"
+    echo "ERROR: PulseAudio stream_audio sink was not created; see $AUDIO_LOG" >&2
     cat /tmp/pulse.log >&2 || true
     exit 1
   fi
+  pactl list short sinks >> "$AUDIO_LOG" 2>&1 || true
   # Force Chromium's PulseAudio client onto the sink, even if the runner has
   # another default sink or a stale per-application routing preference.
   export PULSE_SINK=stream_audio
@@ -95,45 +106,64 @@ fi
   --disable-session-crashed-bubble \
   --no-first-run \
   --no-default-browser-check \
+  --enable-logging=stderr \
+  --log-level=0 \
   --disable-translate \
+  --disable-features=PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies \
   --disable-background-timer-throttling \
   --disable-renderer-backgrounding \
   --disable-backgrounding-occluded-windows \
   --autoplay-policy=no-user-gesture-required \
   --user-data-dir=/tmp/chrome-stream-profile \
   "http://127.0.0.1:8765/overlay/" \
-  >/tmp/chrome.log 2>&1 &
+  >/tmp/chrome.log 2> >(tee -a "$AUDIO_LOG" >>/tmp/chrome.log) &
 CHROME_PID=$!
 sleep 4
+
+# Confirm Chromium opened an audio stream before FFmpeg starts reading the
+# monitor. A healthy sink alone can still produce silence.
+if command -v pactl >/dev/null 2>&1; then
+  AUDIO_INPUTS="$(pactl list short sink-inputs 2>/dev/null || true)"
+  if [[ -z "$AUDIO_INPUTS" ]]; then
+    audio_log "ERROR: Chromium did not create a PulseAudio sink input"
+    echo "ERROR: Chromium did not create a PulseAudio sink input; see $AUDIO_LOG" >&2
+    cat /tmp/chrome.log >&2 || true
+    exit 1
+  fi
+  while read -r input_id _; do
+    [[ -z "$input_id" ]] && continue
+    pactl move-sink-input "$input_id" stream_audio >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not move sink input $input_id to stream_audio"
+  done <<< "$AUDIO_INPUTS"
+  AUDIO_INPUTS="$(pactl list short sink-inputs 2>/dev/null || true)"
+  printf '%s\n' "$AUDIO_INPUTS" >> "$AUDIO_LOG"
+  echo "==> PulseAudio sink inputs:"
+  printf '%s\n' "$AUDIO_INPUTS"
+fi
 
 # Keep the X11 pointer out of the captured content.
 if command -v xdotool >/dev/null 2>&1; then
   xdotool mousemove --display "$DISPLAY" "$((WIDTH + 50))" "$((HEIGHT + 50))" >/dev/null 2>&1 || true
 fi
 
-# Audio: prefer the browser's real audio via PulseAudio monitor; fall back to silent audio
-# only if the monitor is unavailable so YouTube still accepts the ingest.
-if command -v pulseaudio >/dev/null 2>&1 && pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
-  ffmpeg -hide_banner -loglevel error \
-    -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
-    -thread_queue_size 512 -f pulse -i "stream_audio.monitor" \
-    -map 0:v:0 -map 1:a:0 \
-    -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
-    -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
-    -c:a aac -b:a 128k -ar 44100 \
-    -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
-    >/tmp/ffmpeg.log 2>&1 &
-else
-  ffmpeg -hide_banner -loglevel error \
-    -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=44100" \
-    -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
-    -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
-    -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
-    -c:a aac -b:a 128k -ar 44100 \
-    -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
-    >/tmp/ffmpeg.log 2>&1 &
+if ! command -v pulseaudio >/dev/null 2>&1 || ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
+  audio_log "ERROR: real audio capture is unavailable; refusing to stream silent audio"
+  echo "ERROR: real audio capture is unavailable; see $AUDIO_LOG" >&2
+  exit 1
 fi
+
+audio_log "Starting FFmpeg with stream_audio.monitor"
+
+ffmpeg -hide_banner -loglevel error \
+  -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+  -thread_queue_size 512 -f pulse -i "stream_audio.monitor" \
+  -map 0:v:0 -map 1:a:0 \
+  -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
+  -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
+  -c:a aac -b:a 128k -ar 44100 \
+  -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
+  >/tmp/ffmpeg.log 2> >(tee -a "$AUDIO_LOG" >&2) &
 FFMPEG_PID=$!
+audio_log "FFmpeg started with PID $FFMPEG_PID"
 echo "$FFMPEG_PID" > "$PID_FILE"
 echo "==> FFmpeg PID $FFMPEG_PID pushing to YouTube"
 
@@ -216,7 +246,8 @@ while kill -0 "$FFMPEG_PID" 2>/dev/null; do
 done
 
 if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
-  echo "ERROR: FFmpeg exited early — see /tmp/ffmpeg.log" >&2
+  audio_log "ERROR: FFmpeg exited early; see /tmp/ffmpeg.log"
+  echo "ERROR: FFmpeg exited early — see $AUDIO_LOG and /tmp/ffmpeg.log" >&2
   tail -n 50 /tmp/ffmpeg.log || true
   exit 1
 fi

@@ -176,6 +176,14 @@ function startMusic(cfg) {
   playerHost.id = "music-player";
   playerHost.setAttribute("allow", "autoplay; encrypted-media; fullscreen");
   document.body.appendChild(playerHost);
+  const iframeObserver = new MutationObserver(() => {
+    const iframe = playerHost.querySelector("iframe");
+    if (!iframe) return;
+    iframe.setAttribute("allow", "autoplay; encrypted-media; fullscreen");
+    iframe.setAttribute("allowfullscreen", "true");
+    iframeObserver.disconnect();
+  });
+  iframeObserver.observe(playerHost, { childList: true, subtree: true });
 
   const createPlayer = () => {
     if (!window.YT?.Player) {
