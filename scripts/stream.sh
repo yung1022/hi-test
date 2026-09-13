@@ -68,9 +68,18 @@ UNCLUTTER_PID=$!
 if command -v pulseaudio >/dev/null 2>&1; then
   audio_log "Starting PulseAudio"
   export PULSE_SERVER="unix:$PULSE_SOCKET"
+  # GitHub runners may provide a malformed desktop-session bus address.
+  # Chromium does not need D-Bus for this capture and the bad value obscures
+  # the real audio diagnostics.
+  unset DBUS_SESSION_BUS_ADDRESS DBUS_STARTER_ADDRESS DBUS_STARTER_BUS_TYPE
   pulseaudio --daemonize --exit-idle-time=-1 --log-target=file:/tmp/pulse.log \
     --load="module-native-protocol-unix socket=$PULSE_SOCKET auth-anonymous=1"
   sleep 1
+  if ! pactl info >> "$AUDIO_LOG" 2>&1; then
+    audio_log "ERROR: pactl could not connect to $PULSE_SERVER"
+    cat /tmp/pulse.log >&2 || true
+    exit 1
+  fi
   if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
     audio_log "PulseAudio stream_audio sink already exists"
     true
