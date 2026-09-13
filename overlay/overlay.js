@@ -164,6 +164,16 @@ function youtubeVideoId(url) {
   return null;
 }
 
+function youtubePlaylistId(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith("youtube.com")) return parsed.searchParams.get("list");
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function startMusic(cfg) {
   const tracks = (cfg.music || [])
     .filter((track) => track && track.enabled !== false)
@@ -176,6 +186,8 @@ function startMusic(cfg) {
   console.info("Music queue loaded", tracks.map((track) => track.videoId));
 
   let index = 0;
+  let playlistFallbackUsed = false;
+  const fallbackPlaylist = cfg.musicPlaylist || "PL1rcvJR5LYrrz1XiNaDN";
   const playerHost = document.createElement("div");
   playerHost.id = "music-player";
   playerHost.setAttribute("allow", "autoplay; encrypted-media; fullscreen");
@@ -218,8 +230,18 @@ function startMusic(cfg) {
         onAutoplayBlocked: () => console.error("Music autoplay was blocked"),
         onError: (event) => {
           console.error("Music player error", event.data);
+          if (event.data === 150 && !playlistFallbackUsed && fallbackPlaylist) {
+            playlistFallbackUsed = true;
+            console.info("Switching to fallback YouTube playlist", fallbackPlaylist);
+            event.target.loadPlaylist({
+              list: fallbackPlaylist,
+              listType: "playlist",
+              index: 0,
+            });
+            return;
+          }
           index = (index + 1) % tracks.length;
-          event.target.loadVideoById(tracks[index].videoId);
+          window.setTimeout(() => event.target.loadVideoById(tracks[index].videoId), 500);
         },
         onStateChange: (event) => {
           console.info("Music player state", event.data);

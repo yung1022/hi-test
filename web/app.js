@@ -122,6 +122,7 @@ const WIDGET_DEFAULTS = {
 
 let widgetsState = [];
 let musicState = [];
+let musicPlaylistState = "";
 
 function uid(type) {
   return `${type}-${Math.random().toString(36).slice(2, 8)}`;
@@ -359,6 +360,7 @@ function fillSceneForm(cfg) {
   widgetsState = (cfg.widgets || []).map((w) => normalizeWidget(w));
   renderWidgetsEditor();
   musicState = (cfg.music || []).map((track) => normalizeMusic(track));
+  musicPlaylistState = cfg.musicPlaylist || "";
   renderMusicEditor();
 
   $("#v-width").value = cfg.video?.width || 1280;
@@ -383,6 +385,7 @@ function readSceneForm() {
       url: $("#source-url").value.trim(),
     },
     widgets: widgetsState.map((w) => normalizeWidget(w)),
+    musicPlaylist: musicPlaylistState,
     music: musicState.map((track) => normalizeMusic(track)),
     brand: {
       name: $("#brand-name").value.trim() || "LIVE DESK",
