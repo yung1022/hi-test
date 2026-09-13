@@ -28,6 +28,7 @@ STOP_FLAG="/tmp/stream-stop.flag"
 SEGMENT_END_FLAG="/tmp/stream-segment-end.flag"
 PID_FILE="/tmp/stream-ffmpeg.pid"
 AUDIO_LOG="/tmp/audio.log"
+AUDIO_MODE="silent"
 PULSE_SOCKET="/tmp/stream-pulse-$UID.sock"
 AUDIO_RUNTIME="/tmp/stream-audio-runtime-$UID"
 PIPEWIRE_PID=""
@@ -101,37 +102,35 @@ if command -v pipewire >/dev/null 2>&1 && command -v pipewire-pulse >/dev/null 2
   audio_log "PipeWire server: $PULSE_SERVER"
 else
   audio_log "ERROR: PipeWire packages are unavailable"
-  exit 1
 fi
 
-if command -v pactl >/dev/null 2>&1; then
+if [[ "$AUDIO_MODE" == "silent" ]] && command -v pactl >/dev/null 2>&1 && [[ -n "${PULSE_SERVER:-}" ]]; then
   # GitHub runners may provide a malformed desktop-session bus address.
   # Chromium does not need D-Bus for this capture and the bad value obscures
   # the real audio diagnostics.
   unset DBUS_SESSION_BUS_ADDRESS DBUS_STARTER_ADDRESS DBUS_STARTER_BUS_TYPE
-  if ! pactl info >> "$AUDIO_LOG" 2>&1; then
+  if pactl info >> "$AUDIO_LOG" 2>&1; then
+    if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
+      audio_log "PipeWire pulse-compat stream_audio sink already exists"
+    else
+      audio_log "Creating PipeWire pulse-compat stream_audio null sink"
+      pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not create stream_audio"
+    fi
+    pactl set-default-sink stream_audio >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not set stream_audio as default sink"
+  else
     audio_log "ERROR: pactl could not connect to $PULSE_SERVER"
     cat /tmp/pipewire.log /tmp/pipewire-pulse.log /tmp/wireplumber.log >&2 2>/dev/null || true
-    exit 1
   fi
-  if pactl list short sinks 2>/dev/null | grep -q "stream_audio"; then
-    audio_log "PipeWire pulse-compat stream_audio sink already exists"
-    true
-  else
-    audio_log "Creating PipeWire pulse-compat stream_audio null sink"
-    pactl load-module module-null-sink sink_name=stream_audio sink_properties=device.description="StreamAudio" >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not create stream_audio"
-  fi
-  pactl set-default-sink stream_audio >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not set stream_audio as default sink"
   if ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
     audio_log "ERROR: PulseAudio stream_audio sink was not created"
-    echo "ERROR: PulseAudio stream_audio sink was not created; see $AUDIO_LOG" >&2
     cat /tmp/pipewire.log /tmp/pipewire-pulse.log /tmp/wireplumber.log >&2 2>/dev/null || true
-    exit 1
+  else
+    AUDIO_MODE="real"
+    audio_log "Real audio capture is available through PipeWire"
   fi
   pactl list short sinks >> "$AUDIO_LOG" 2>&1 || true
 else
-  audio_log "ERROR: pactl is unavailable"
-  exit 1
+  audio_log "ERROR: pactl is unavailable; using silent audio fallback"
 fi
 
 # Open overlay in Chromium (kiosk)
@@ -171,7 +170,7 @@ sleep 4
 
 # Confirm Chromium opened an audio stream before FFmpeg starts reading the
 # monitor. A healthy sink alone can still produce silence.
-if command -v pactl >/dev/null 2>&1; then
+if [[ "$AUDIO_MODE" == "real" ]] && command -v pactl >/dev/null 2>&1; then
   AUDIO_INPUTS=""
   for attempt in {1..30}; do
     AUDIO_INPUTS="$(pactl list short sink-inputs 2>/dev/null || true)"
@@ -185,9 +184,9 @@ if command -v pactl >/dev/null 2>&1; then
     pactl list short clients >> "$AUDIO_LOG" 2>&1 || true
     audio_log "PulseAudio sink inputs:"
     pactl list sink-inputs >> "$AUDIO_LOG" 2>&1 || true
-    echo "ERROR: Chromium did not create a PulseAudio sink input; see $AUDIO_LOG" >&2
+    echo "WARNING: Chromium did not create an audio sink input; continuing with silent audio" >&2
     cat /tmp/chrome.log >&2 || true
-    exit 1
+    AUDIO_MODE="silent"
   fi
   while read -r input_id _; do
     [[ -z "$input_id" ]] && continue
@@ -204,23 +203,29 @@ if command -v xdotool >/dev/null 2>&1; then
   xdotool mousemove --display "$DISPLAY" "$((WIDTH + 50))" "$((HEIGHT + 50))" >/dev/null 2>&1 || true
 fi
 
-if ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
-  audio_log "ERROR: real audio capture is unavailable; refusing to stream silent audio"
-  echo "ERROR: real audio capture is unavailable; see $AUDIO_LOG" >&2
-  exit 1
+if [[ "$AUDIO_MODE" == "real" ]]; then
+  audio_log "Starting FFmpeg with stream_audio.monitor"
+  ffmpeg -hide_banner -loglevel error \
+    -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+    -thread_queue_size 512 -f pulse -i "stream_audio.monitor" \
+    -map 0:v:0 -map 1:a:0 \
+    -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
+    -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
+    -c:a aac -b:a 128k -ar 44100 \
+    -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
+    >/tmp/ffmpeg.log 2> >(tee -a "$AUDIO_LOG" >&2) &
+else
+  audio_log "WARNING: Starting FFmpeg with silent audio fallback"
+  ffmpeg -hide_banner -loglevel error \
+    -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=44100" \
+    -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
+    -map 0:a:0 -map 1:v:0 \
+    -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
+    -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
+    -c:a aac -b:a 128k -ar 44100 \
+    -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
+    >/tmp/ffmpeg.log 2> >(tee -a "$AUDIO_LOG" >&2) &
 fi
-
-audio_log "Starting FFmpeg with stream_audio.monitor"
-
-ffmpeg -hide_banner -loglevel error \
-  -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
-  -thread_queue_size 512 -f pulse -i "stream_audio.monitor" \
-  -map 0:v:0 -map 1:a:0 \
-  -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
-  -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
-  -c:a aac -b:a 128k -ar 44100 \
-  -f flv "${YOUTUBE_RTMP_URL}/${YOUTUBE_STREAM_KEY}" \
-  >/tmp/ffmpeg.log 2> >(tee -a "$AUDIO_LOG" >&2) &
 FFMPEG_PID=$!
 audio_log "FFmpeg started with PID $FFMPEG_PID"
 echo "$FFMPEG_PID" > "$PID_FILE"
