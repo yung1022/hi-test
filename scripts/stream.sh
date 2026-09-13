@@ -34,6 +34,9 @@ PIPEWIRE_PID=""
 PIPEWIRE_PULSE_PID=""
 WIREPLUMBER_PID=""
 UNCLUTTER_PID=""
+HTTP_PID=""
+CHROME_PID=""
+XVFB_PID=""
 rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE" "$PULSE_SOCKET"
 rm -rf "$AUDIO_RUNTIME"
 mkdir -p "$AUDIO_RUNTIME"
@@ -83,12 +86,12 @@ if command -v pipewire >/dev/null 2>&1 && command -v pipewire-pulse >/dev/null 2
   audio_log "Starting PipeWire audio backend"
   export XDG_RUNTIME_DIR="$AUDIO_RUNTIME"
   unset DBUS_SESSION_BUS_ADDRESS DBUS_STARTER_ADDRESS DBUS_STARTER_BUS_TYPE
-  pipewire --daemon >/tmp/pipewire.log 2>&1 &
+  pipewire >/tmp/pipewire.log 2>&1 &
   PIPEWIRE_PID=$!
-  pipewire-pulse --daemon >/tmp/pipewire-pulse.log 2>&1 &
+  pipewire-pulse >/tmp/pipewire-pulse.log 2>&1 &
   PIPEWIRE_PULSE_PID=$!
   if command -v wireplumber >/dev/null 2>&1; then
-    wireplumber --daemon >/tmp/wireplumber.log 2>&1 &
+    wireplumber >/tmp/wireplumber.log 2>&1 &
     WIREPLUMBER_PID=$!
   fi
   export PULSE_SERVER="unix:$AUDIO_RUNTIME/pulse/native"
