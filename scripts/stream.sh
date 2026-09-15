@@ -31,6 +31,8 @@ AUDIO_LOG="/tmp/audio.log"
 AUDIO_MODE="silent"
 PULSE_SOCKET="/tmp/stream-pulse-$UID.sock"
 AUDIO_RUNTIME="/tmp/stream-audio-runtime-$UID"
+PULSE_NATIVE_SOCKET="$AUDIO_RUNTIME/pulse/native"
+PULSE_READY=0
 PIPEWIRE_PID=""
 PIPEWIRE_PULSE_PID=""
 WIREPLUMBER_PID=""
@@ -47,6 +49,32 @@ chmod 700 "$AUDIO_RUNTIME"
 
 audio_log() {
   printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*" >> "$AUDIO_LOG"
+}
+
+dump_audio_backend_logs() {
+  cat /tmp/pipewire.log /tmp/pipewire-pulse.log /tmp/wireplumber.log >&2 2>/dev/null || true
+}
+
+wait_for_pulse_server() {
+  local attempt
+  for attempt in {1..30}; do
+    if [[ -S "$PULSE_NATIVE_SOCKET" ]] && pactl info >> "$AUDIO_LOG" 2>&1; then
+      audio_log "PulseAudio server is ready after ${attempt}s"
+      return 0
+    fi
+    if [[ -n "$PIPEWIRE_PID" ]] && ! kill -0 "$PIPEWIRE_PID" 2>/dev/null; then
+      audio_log "ERROR: pipewire exited before the PulseAudio socket was created"
+      return 1
+    fi
+    if [[ -n "$PIPEWIRE_PULSE_PID" ]] && ! kill -0 "$PIPEWIRE_PULSE_PID" 2>/dev/null; then
+      audio_log "ERROR: pipewire-pulse exited before the PulseAudio socket was created"
+      return 1
+    fi
+    audio_log "Waiting for PulseAudio socket at $PULSE_NATIVE_SOCKET ($attempt/30)"
+    sleep 1
+  done
+  audio_log "ERROR: PulseAudio socket was not created at $PULSE_NATIVE_SOCKET"
+  return 1
 }
 
 echo "==> Stream segment starting (${SEGMENT_MINUTES}m budget, ${WIDTH}x${HEIGHT}@${FPS})"
@@ -95,16 +123,20 @@ if command -v pipewire >/dev/null 2>&1 && command -v pipewire-pulse >/dev/null 2
     wireplumber >/tmp/wireplumber.log 2>&1 &
     WIREPLUMBER_PID=$!
   fi
-  export PULSE_SERVER="unix:$AUDIO_RUNTIME/pulse/native"
+  export PULSE_SERVER="unix:$PULSE_NATIVE_SOCKET"
   export PULSE_SINK=stream_audio
   export PULSE_LATENCY_MSEC=60
-  sleep 2
-  audio_log "PipeWire server: $PULSE_SERVER"
+  if wait_for_pulse_server; then
+    PULSE_READY=1
+    audio_log "PipeWire server: $PULSE_SERVER"
+  else
+    dump_audio_backend_logs
+  fi
 else
   audio_log "ERROR: PipeWire packages are unavailable"
 fi
 
-if [[ "$AUDIO_MODE" == "silent" ]] && command -v pactl >/dev/null 2>&1 && [[ -n "${PULSE_SERVER:-}" ]]; then
+if [[ "$AUDIO_MODE" == "silent" ]] && [[ "$PULSE_READY" == "1" ]] && command -v pactl >/dev/null 2>&1 && [[ -n "${PULSE_SERVER:-}" ]]; then
   # GitHub runners may provide a malformed desktop-session bus address.
   # Chromium does not need D-Bus for this capture and the bad value obscures
   # the real audio diagnostics.
@@ -119,16 +151,18 @@ if [[ "$AUDIO_MODE" == "silent" ]] && command -v pactl >/dev/null 2>&1 && [[ -n 
     pactl set-default-sink stream_audio >> "$AUDIO_LOG" 2>&1 || audio_log "ERROR: could not set stream_audio as default sink"
   else
     audio_log "ERROR: pactl could not connect to $PULSE_SERVER"
-    cat /tmp/pipewire.log /tmp/pipewire-pulse.log /tmp/wireplumber.log >&2 2>/dev/null || true
+    dump_audio_backend_logs
   fi
   if ! pactl list short sinks 2>/dev/null | awk '$2 == "stream_audio" { found = 1 } END { exit !found }'; then
     audio_log "ERROR: PulseAudio stream_audio sink was not created"
-    cat /tmp/pipewire.log /tmp/pipewire-pulse.log /tmp/wireplumber.log >&2 2>/dev/null || true
+    dump_audio_backend_logs
   else
     AUDIO_MODE="real"
     audio_log "Real audio capture is available through PipeWire"
   fi
   pactl list short sinks >> "$AUDIO_LOG" 2>&1 || true
+elif [[ "$AUDIO_MODE" == "silent" ]] && [[ -n "${PULSE_SERVER:-}" ]] && [[ "$PULSE_READY" != "1" ]]; then
+  audio_log "ERROR: PulseAudio server never became ready; using silent audio fallback"
 else
   audio_log "ERROR: pactl is unavailable; using silent audio fallback"
 fi
