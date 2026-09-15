@@ -51,6 +51,22 @@ audio_log() {
   printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*" >> "$AUDIO_LOG"
 }
 
+require_audio_command() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    audio_log "ERROR: required audio command '$cmd' is not installed"
+    echo "ERROR: required audio command '$cmd' is not installed." >&2
+    echo "Run scripts/check-deps.sh or verify the workflow's Install dependencies step completed successfully." >&2
+    exit 1
+  fi
+}
+
+preflight_audio_dependencies() {
+  require_audio_command pipewire
+  require_audio_command pipewire-pulse
+  require_audio_command pactl
+}
+
 dump_audio_backend_logs() {
   cat /tmp/pipewire.log /tmp/pipewire-pulse.log /tmp/wireplumber.log >&2 2>/dev/null || true
 }
@@ -80,6 +96,8 @@ wait_for_pulse_server() {
 echo "==> Stream segment starting (${SEGMENT_MINUTES}m budget, ${WIDTH}x${HEIGHT}@${FPS})"
 echo "==> Overlay: $OVERLAY_DIR"
 echo "==> Config: $CONFIG"
+
+preflight_audio_dependencies
 
 # Serve overlay + config locally so Chromium can load file assets consistently
 python3 -m http.server 8765 --directory "$ROOT" >/tmp/overlay-http.log 2>&1 &
