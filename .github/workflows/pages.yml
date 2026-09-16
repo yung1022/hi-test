@@ -6,8 +6,6 @@ on:
     paths:
       - "web/**"
       - "overlay/**"
-      - "leaderboard/**"
-      - "index.html"
       - "config/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -33,9 +31,8 @@ jobs:
       - name: Stage site
         run: |
           mkdir -p _site
-          cp -R web overlay leaderboard config _site/
-          cp index.html _site/index.html
-          cat > _site/control-panel.html <<'HTML'
+          cp -R web overlay config _site/
+          cat > _site/index.html <<'HTML'
           <!DOCTYPE html>
           <meta charset="utf-8" />
           <meta http-equiv="refresh" content="0; url=./web/" />
