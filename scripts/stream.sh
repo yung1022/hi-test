@@ -28,6 +28,8 @@ STOP_FLAG="/tmp/stream-stop.flag"
 SEGMENT_END_FLAG="/tmp/stream-segment-end.flag"
 PID_FILE="/tmp/stream-ffmpeg.pid"
 AUDIO_LOG="/tmp/audio.log"
+AUDIO_DIR="$ROOT/config/audio"
+AUDIO_PLAYLIST="/tmp/stream-audio-list-$UID.txt"
 AUDIO_MODE="silent"
 PULSE_SOCKET="/tmp/stream-pulse-$UID.sock"
 AUDIO_RUNTIME="/tmp/stream-audio-runtime-$UID"
@@ -40,8 +42,32 @@ UNCLUTTER_PID=""
 HTTP_PID=""
 CHROME_PID=""
 XVFB_PID=""
-rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE" "$PULSE_SOCKET"
+rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE" "$PULSE_SOCKET" "$AUDIO_PLAYLIST"
 rm -rf "$AUDIO_RUNTIME"
+: > "$AUDIO_LOG"
+
+# Use local files directly as FFmpeg's audio input. This avoids depending on
+# Chromium creating a PulseAudio sink input for the music.
+shopt -s nullglob
+AUDIO_FILES=()
+for audio_file in "$AUDIO_DIR"/*; do
+  [[ -f "$audio_file" ]] || continue
+  case "${audio_file##*.}" in
+    mp3|MP3|wav|WAV|ogg|OGG|flac|FLAC|m4a|M4A|aac|AAC) AUDIO_FILES+=("$audio_file") ;;
+    *) continue ;;
+  esac
+done
+# Shuffle once per stream segment, then loop that randomized playlist.
+if ((${#AUDIO_FILES[@]})); then
+  mapfile -t AUDIO_FILES <(printf '%s\n' "${AUDIO_FILES[@]}" | shuf)
+  for audio_file in "${AUDIO_FILES[@]}"; do
+    escaped_file=${audio_file//\'/\\\'}
+    printf "file '%s'\n" "$escaped_file" >> "$AUDIO_PLAYLIST"
+  done
+fi
+if [[ -s "$AUDIO_PLAYLIST" ]]; then
+  AUDIO_MODE="file"
+fi
 mkdir -p "$AUDIO_RUNTIME"
 mkdir -p "$AUDIO_RUNTIME/pulse"
 chmod 700 "$AUDIO_RUNTIME"
@@ -97,8 +123,9 @@ echo "==> Stream segment starting (${SEGMENT_MINUTES}m budget, ${WIDTH}x${HEIGHT
 echo "==> Overlay: $OVERLAY_DIR"
 echo "==> Config: $CONFIG"
 
-preflight_audio_dependencies
-
+if [[ "$AUDIO_MODE" == "silent" ]]; then
+  preflight_audio_dependencies
+fi
 # Serve overlay + config locally so Chromium can load file assets consistently
 python3 -m http.server 8765 --directory "$ROOT" >/tmp/overlay-http.log 2>&1 &
 HTTP_PID=$!
@@ -126,10 +153,9 @@ sleep 1
 unclutter -display "$DISPLAY" -idle 0 -root >/tmp/unclutter.log 2>&1 &
 UNCLUTTER_PID=$!
 
-# Create the capture sink before Chromium starts through PipeWire's PulseAudio
-# compatibility server. Chromium and FFmpeg can both use pactl/stream names,
-# while PipeWire owns the actual audio graph.
-if command -v pipewire >/dev/null 2>&1 && command -v pipewire-pulse >/dev/null 2>&1; then
+# Create a capture sink only for the legacy Chromium-audio fallback. Local audio
+# files bypass Chromium and PulseAudio entirely.
+if [[ "$AUDIO_MODE" == "silent" ]] && command -v pipewire >/dev/null 2>&1 && command -v pipewire-pulse >/dev/null 2>&1; then
   audio_log "Starting PipeWire audio backend"
   export XDG_RUNTIME_DIR="$AUDIO_RUNTIME"
   unset DBUS_SESSION_BUS_ADDRESS DBUS_STARTER_ADDRESS DBUS_STARTER_BUS_TYPE
@@ -182,10 +208,14 @@ if [[ "$AUDIO_MODE" == "silent" ]] && [[ "$PULSE_READY" == "1" ]] && command -v 
 elif [[ "$AUDIO_MODE" == "silent" ]] && [[ -n "${PULSE_SERVER:-}" ]] && [[ "$PULSE_READY" != "1" ]]; then
   audio_log "ERROR: PulseAudio server never became ready; using silent audio fallback"
 else
-  audio_log "ERROR: pactl is unavailable; using silent audio fallback"
-fi
-
-# Open overlay in Chromium (kiosk)
+    audio_log "ERROR: pactl is unavailable; using silent audio fallback"
+  fi
+  if [[ "$AUDIO_MODE" == "file" ]]; then
+    audio_log "Using local audio playlist from $AUDIO_DIR"
+  else
+    audio_log "WARNING: No audio files found in $AUDIO_DIR; using silent audio fallback"
+  fi
+  # Open overlay in Chromium (kiosk)
 CHROME_BIN="$(command -v google-chrome || command -v chromium-browser || command -v chromium || true)"
 if [[ -z "$CHROME_BIN" ]]; then
   echo "ERROR: Chromium/Chrome not found" >&2
@@ -255,12 +285,12 @@ if command -v xdotool >/dev/null 2>&1; then
   xdotool mousemove --display "$DISPLAY" "$((WIDTH + 50))" "$((HEIGHT + 50))" >/dev/null 2>&1 || true
 fi
 
-if [[ "$AUDIO_MODE" == "real" ]]; then
-  audio_log "Starting FFmpeg with stream_audio.monitor"
+if [[ "$AUDIO_MODE" == "file" ]]; then
+  audio_log "Starting FFmpeg with local audio files"
   ffmpeg -hide_banner -loglevel error \
+    -stream_loop -1 -f concat -safe 0 -i "$AUDIO_PLAYLIST" \
     -thread_queue_size 512 -f x11grab -draw_mouse 0 -video_size "${WIDTH}x${HEIGHT}" -framerate "$FPS" -i "$DISPLAY" \
-    -thread_queue_size 512 -f pulse -i "stream_audio.monitor" \
-    -map 0:v:0 -map 1:a:0 \
+    -map 1:v:0 -map 0:a:0 \
     -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
     -b:v "$BITRATE" -maxrate "$BITRATE" -bufsize 5000k -g $((FPS * 2)) \
     -c:a aac -b:a 128k -ar 44100 \

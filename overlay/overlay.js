@@ -175,6 +175,10 @@ function youtubePlaylistId(url) {
 }
 
 function startMusic(cfg) {
+  // Music is mixed by FFmpeg from config/audio. Keep this overlay silent so
+  // Chromium does not need to create a PulseAudio sink input.
+  return;
+
   const tracks = (cfg.music || [])
     .filter((track) => track && track.enabled !== false)
     .map((track) => ({ ...track, videoId: youtubeVideoId(track.url) }))

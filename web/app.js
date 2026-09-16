@@ -297,7 +297,7 @@ function renderWidgetsEditor() {
 function renderMusicEditor() {
   const root = $("#music-editor");
   if (!musicState.length) {
-    root.innerHTML = `<p class="empty-widgets">No music tracks yet. Add a YouTube URL to build the queue.</p>`;
+    root.innerHTML = `<p class="empty-widgets">No local music tracks configured. Add files under config/audio.</p>`;
     return;
   }
 
@@ -310,7 +310,7 @@ function renderMusicEditor() {
       </div>
       <div class="music-grid">
         <label><span>Title <em>(optional)</em></span><input data-field="title" value="${escapeHtml(track.title)}" placeholder="Song title" /></label>
-        <label><span>YouTube URL</span><input data-field="url" type="url" value="${escapeHtml(track.url)}" placeholder="https://www.youtube.com/watch?v=..." required /></label>
+        <label><span>Local audio file</span><input data-field="url" value="${escapeHtml(track.url)}" placeholder="Managed from config/audio" disabled /></label>
       </div>
     </article>`).join("");
 }
@@ -473,7 +473,7 @@ function bindMusicEditor() {
     syncMusicFromDom();
     musicState.push(normalizeMusic({ title: "", url: "" }));
     renderMusicEditor();
-    setMsg("Added a YouTube track. Paste its URL, then save the scene.");
+    setMsg("Local audio is managed by files in config/audio.");
   });
 
   $("#music-editor").addEventListener("click", (e) => {
