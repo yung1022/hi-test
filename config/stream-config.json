@@ -12,29 +12,6 @@
   },
   "widgets": [
     {
-      "id": "clock-1",
-      "type": "clock",
-      "enabled": true,
-      "zIndex": 6,
-      "label": "",
-      "text": "",
-      "url": "",
-      "timezone": "+08:00",
-      "format": "24h",
-      "position": {
-        "x": 35,
-        "y": 3.5,
-        "xUnit": "%",
-        "yUnit": "%"
-      },
-      "size": {
-        "width": 30,
-        "height": 8,
-        "widthUnit": "%",
-        "heightUnit": "%"
-      }
-    },
-    {
       "id": "iframe-7la5td",
       "type": "iframe",
       "enabled": true,
@@ -56,32 +33,8 @@
         "widthUnit": "%",
         "heightUnit": "%"
       }
-    },
-    {
-      "id": "text-guau15",
-      "type": "text",
-      "enabled": true,
-      "zIndex": 5,
-      "label": "",
-      "text": "Discord FYSC - Season 3 | Instruction in pinned message",
-      "url": "",
-      "timezone": "UTC",
-      "format": "24h",
-      "position": {
-        "x": 15,
-        "y": 0.5,
-        "xUnit": "%",
-        "yUnit": "%"
-      },
-      "size": {
-        "width": 75,
-        "height": 8,
-        "widthUnit": "%",
-        "heightUnit": "%"
-      }
     }
   ],
-  "musicPlaylist": "PL1rcvJR5LYrrz1XiNaDN",
   "music": [
     {
       "id": "track-hnn18q",
