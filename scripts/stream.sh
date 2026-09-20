@@ -29,6 +29,7 @@ SEGMENT_END_FLAG="/tmp/stream-segment-end.flag"
 PID_FILE="/tmp/stream-ffmpeg.pid"
 AUDIO_LOG="/tmp/audio.log"
 AUDIO_DIR="$ROOT/config/audio"
+AUDIO_DOWNLOAD_DIR="/tmp/stream-audio-download-$UID"
 AUDIO_PLAYLIST="/tmp/stream-audio-list-$UID.txt"
 AUDIO_MODE="silent"
 PULSE_SOCKET="/tmp/stream-pulse-$UID.sock"
@@ -43,11 +44,17 @@ HTTP_PID=""
 CHROME_PID=""
 XVFB_PID=""
 rm -f "$STOP_FLAG" "$SEGMENT_END_FLAG" "$PID_FILE" "$PULSE_SOCKET" "$AUDIO_PLAYLIST"
-rm -rf "$AUDIO_RUNTIME"
+rm -rf "$AUDIO_RUNTIME" "$AUDIO_DOWNLOAD_DIR"
 : > "$AUDIO_LOG"
 
-# Use local files directly as FFmpeg's audio input. This avoids depending on
-# Chromium creating a PulseAudio sink input for the music.
+audio_log() {
+  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*" >> "$AUDIO_LOG"
+}
+
+# Use local files directly as FFmpeg's audio input. The control panel stores
+# YouTube URLs, so download those tracks to the runner before FFmpeg starts.
+# This keeps audio in the encoder instead of relying on Chromium autoplay or a
+# PulseAudio sink input (neither of which is guaranteed on GitHub runners).
 shopt -s nullglob
 AUDIO_FILES=()
 for audio_file in "$AUDIO_DIR"/*; do
@@ -57,6 +64,39 @@ for audio_file in "$AUDIO_DIR"/*; do
     *) continue ;;
   esac
 done
+mapfile -t MUSIC_URLS <(python3 - "$CONFIG" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    config = json.load(stream)
+for track in config.get("music", []):
+    if track and track.get("enabled", True) and track.get("url"):
+        print(track["url"])
+PY
+)
+if ((${#MUSIC_URLS[@]})); then
+  if ! command -v yt-dlp >/dev/null 2>&1; then
+    echo "ERROR: yt-dlp is required when music URLs are configured" >&2
+    echo "Install it with scripts/check-deps.sh or add local files under config/audio." >&2
+    exit 1
+  fi
+  mkdir -p "$AUDIO_DOWNLOAD_DIR"
+  for music_url in "${MUSIC_URLS[@]}"; do
+    audio_log "Downloading stream audio: $music_url"
+    if ! yt-dlp --no-playlist --extract-audio --audio-format wav --audio-quality 0 \
+      --output "$AUDIO_DOWNLOAD_DIR/%(id)s.%(ext)s" "$music_url" >> "$AUDIO_LOG" 2>&1; then
+      audio_log "WARNING: failed to download audio URL: $music_url"
+    fi
+  done
+  for audio_file in "$AUDIO_DOWNLOAD_DIR"/*; do
+    [[ -f "$audio_file" ]] && AUDIO_FILES+=("$audio_file")
+  done
+  if ((${#AUDIO_FILES[@]} == 0)); then
+    echo "ERROR: none of the configured music URLs could be downloaded" >&2
+    echo "See $AUDIO_LOG for yt-dlp errors." >&2
+    exit 1
+  fi
+  audio_log "Prepared ${#AUDIO_FILES[@]} audio file(s) for FFmpeg"
+fi
 # Shuffle once per stream segment, then loop that randomized playlist.
 if ((${#AUDIO_FILES[@]})); then
   mapfile -t AUDIO_FILES <(printf '%s\n' "${AUDIO_FILES[@]}" | shuf)
@@ -71,11 +111,6 @@ fi
 mkdir -p "$AUDIO_RUNTIME"
 mkdir -p "$AUDIO_RUNTIME/pulse"
 chmod 700 "$AUDIO_RUNTIME"
-: > "$AUDIO_LOG"
-
-audio_log() {
-  printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*" >> "$AUDIO_LOG"
-}
 
 require_audio_command() {
   local cmd="$1"

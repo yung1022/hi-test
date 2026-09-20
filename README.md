@@ -37,7 +37,7 @@ In **Secrets**, push:
 | `YOUTUBE_RTMP_URL` | Optional; default `rtmp://a.rtmp.youtube.com/live2` |
 | `STREAM_CONTROL_TOKEN` | Optional PAT used by runners to trigger the next workflow + set variables |
 
-Also create a **YouTube live stream** (or scheduled premiere) in YouTube Studio and keep it waiting for the encoder.
+Also create a **YouTube live stream** (or scheduled premiere) in YouTube Studio and keep it waiting for the encoder. Enabled entries in the Music queue are downloaded by `yt-dlp` on the runner and supplied to FFmpeg as the stream audio; the runner also accepts local files in `config/audio`.
 
 ### 4. On-air screen
 

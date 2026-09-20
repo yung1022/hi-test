@@ -16,8 +16,8 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   fonts-liberation \
   ca-certificates \
   curl \
-  python3
-
+  python3 \
+  yt-dlp
 if ! command -v google-chrome >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
   echo "==> Installing Chromium"
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser \
@@ -39,4 +39,5 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 
 ffmpeg -version | head -n 1
+yt-dlp --version
 echo "==> Dependencies ready"
