@@ -84,7 +84,19 @@ jobs:
 
       - name: Install dependencies
         if: steps.gate.outputs.skip != 'true'
-        run: bash scripts/check-deps.sh
+        run: |
+          while true; do
+            echo "Installing dependencies (each attempt has a 1-minute timeout)..."
+            set +e
+            timeout --signal=TERM --kill-after=10s 1m bash scripts/check-deps.sh
+            status=$?
+            set -e
+            if [ "$status" -eq 124 ]; then
+              echo "Dependency installation timed out; retrying immediately."
+              continue
+            fi
+            exit "$status"
+          done
 
       - name: Run livestream segment
         if: steps.gate.outputs.skip != 'true'
@@ -100,3 +112,4 @@ jobs:
           elif [ -f /tmp/stream-segment-end.flag ]; then
             gh variable set STREAM_STATUS --body "handing-off" --repo "$GITHUB_REPOSITORY" || true
           fi
+
