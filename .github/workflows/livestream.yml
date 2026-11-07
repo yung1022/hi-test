@@ -59,18 +59,45 @@ jobs:
 
       - name: Install dependencies
         run: |
-          while true; do
-            echo "Installing dependencies (each attempt has a 1-minute timeout)..."
-            set +e
-            timeout --signal=TERM --kill-after=10s 1m bash scripts/check-deps.sh
-            status=$?
-            set -e
-            if [ "$status" -eq 124 ]; then
-              echo "Dependency installation timed out; retrying immediately."
-              continue
-            fi
-            exit "$status"
-          done
+          python3 - <<'PY'
+          import os
+          import signal
+          import subprocess
+          import time
+
+          while True:
+              print("Installing dependencies (60-second attempt timeout)...", flush=True)
+              proc = subprocess.Popen(
+                  ["bash", "scripts/check-deps.sh"],
+                  start_new_session=True,
+              )
+              deadline = time.monotonic() + 60
+              while proc.poll() is None and time.monotonic() < deadline:
+                  time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+
+              status = proc.poll()
+              if status is None:
+                  print("Dependency install timed out; terminating its process group.", flush=True)
+                  try:
+                      os.killpg(proc.pid, signal.SIGTERM)
+                  except ProcessLookupError:
+                      pass
+                  try:
+                      proc.wait(timeout=5)
+                  except subprocess.TimeoutExpired:
+                      try:
+                          os.killpg(proc.pid, signal.SIGKILL)
+                      except ProcessLookupError:
+                          pass
+                      proc.wait()
+                  print("Retrying dependency installation immediately.", flush=True)
+                  continue
+
+              if status != 0:
+                  raise SystemExit(status)
+              print("Dependencies installed successfully.", flush=True)
+              break
+          PY
 
       - name: Run livestream segment
         run: bash scripts/stream.sh
